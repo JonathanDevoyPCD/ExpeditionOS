@@ -1,0 +1,19 @@
+# Local credentials
+.env
+.env.*
+!.env.example
+openaiapikey.md
+
+# Dependencies and build output
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+
+# Local tooling
+*.log
+.playwright-cli/
+output/playwright/
+.DS_Store
+Thumbs.db
