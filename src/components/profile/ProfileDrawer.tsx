@@ -1,13 +1,18 @@
 "use client";
 
-import { ContactRound, HeartPulse, IdCard, LoaderCircle, LockKeyhole, MapPin, Save, ShieldCheck, UserRound, X } from "lucide-react";
+import { ContactRound, Download, FileText, HeartPulse, IdCard, LoaderCircle, LockKeyhole, MapPin, Save, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
+import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { deleteAccount, downloadAccountData, exportAccountData } from "@/lib/account";
 import { saveProfile } from "@/lib/profiles";
 import type { ExpeditionProfile } from "@/types/profile";
 
 export default function ProfileDrawer({ profile, onClose, onSaved }: { profile: ExpeditionProfile; onClose: () => void; onSaved: (profile: ExpeditionProfile) => void }) {
   const [draft, setDraft] = useState(profile);
   const [saving, setSaving] = useState(false);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const set = (key: keyof ExpeditionProfile, value: string) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -27,6 +32,32 @@ export default function ProfileDrawer({ profile, onClose, onSaved }: { profile: 
       setStatus(reason instanceof Error ? reason.message : "Your profile could not be saved.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function downloadExport() {
+    setAccountBusy(true);
+    setStatus(null);
+    try {
+      downloadAccountData(await exportAccountData(profile.id));
+      setStatus("Account export downloaded.");
+    } catch (reason) {
+      setStatus(reason instanceof Error ? reason.message : "Your account export could not be created.");
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
+  async function removeAccount() {
+    if (deleteConfirmation !== "DELETE") return;
+    setAccountBusy(true);
+    setStatus(null);
+    try {
+      await deleteAccount();
+      onClose();
+    } catch (reason) {
+      setStatus(reason instanceof Error ? reason.message : "Your account could not be deleted.");
+      setAccountBusy(false);
     }
   }
 
@@ -58,7 +89,16 @@ export default function ProfileDrawer({ profile, onClose, onSaved }: { profile: 
             <SelectField label="Preferred OTP method" value={draft.preferredOtpChannel} onChange={(v) => setDraft((current) => ({ ...current, preferredOtpChannel: v === "sms" ? "sms" : "email" }))} options={[["email", "Email"], ["sms", "Contact number (setup pending)"]]} />
           </ProfileSection>
 
-          <div className="sticky bottom-0 -mx-5 flex items-center gap-3 border-t border-white/[0.07] bg-[#041421]/92 px-5 py-4 backdrop-blur-xl sm:-mx-7 sm:px-7">{status && <p className={`mr-auto text-[10px] ${status.includes("saved") ? "text-[#86b9b0]" : "text-rose-200/70"}`}>{status}</p>}<button onClick={onClose} className="h-11 rounded-xl px-4 text-xs font-semibold text-[#d0d6d6]/45 hover:text-white">Cancel</button><button onClick={submit} disabled={saving} className="flex h-11 items-center gap-2 rounded-xl bg-[#86b9b0] px-5 text-xs font-bold text-[#041421] disabled:opacity-50">{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />} Save profile</button></div>
+          <ProfileSection icon={<ShieldCheck className="size-4" />} title="Account & data" note="Review the alpha policies, download your information, or permanently close your account.">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Link href="/privacy" target="_blank" rel="noreferrer" className="flex h-11 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#041421]/35 px-4 text-xs font-semibold text-[#d0d6d6]/62 transition hover:border-[#86b9b0]/30 hover:text-white"><FileText className="size-4 text-[#86b9b0]" /> Privacy notice</Link>
+              <Link href="/terms" target="_blank" rel="noreferrer" className="flex h-11 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#041421]/35 px-4 text-xs font-semibold text-[#d0d6d6]/62 transition hover:border-[#86b9b0]/30 hover:text-white"><FileText className="size-4 text-[#86b9b0]" /> Terms of use</Link>
+            </div>
+            <button type="button" onClick={downloadExport} disabled={accountBusy} className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#86b9b0]/20 bg-[#86b9b0]/[0.07] text-xs font-semibold text-[#86b9b0] transition hover:bg-[#86b9b0]/12 disabled:opacity-50">{accountBusy && !deleteOpen ? <LoaderCircle className="size-4 animate-spin" /> : <Download className="size-4" />} Download my account data</button>
+            {!deleteOpen ? <button type="button" onClick={() => { setDeleteOpen(true); setStatus(null); }} className="mt-3 flex h-10 w-full items-center justify-center gap-2 text-[10px] font-semibold text-rose-200/55 transition hover:text-rose-200"><Trash2 className="size-3.5" /> Delete account</button> : <div className="mt-4 rounded-2xl border border-rose-300/15 bg-rose-300/[0.05] p-4"><p className="text-xs font-semibold text-rose-100/85">Permanently delete this account?</p><p className="mt-1 text-[9px] leading-4 text-[#d0d6d6]/42">Download an export first if needed. This removes your profile and owned data and cannot be undone. Type <strong className="text-rose-100/80">DELETE</strong> to continue.</p><input value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} placeholder="Type DELETE" className="mt-3 h-10 w-full rounded-xl border border-rose-300/15 bg-[#041421]/45 px-3 text-xs text-white outline-none focus:border-rose-300/35" /><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={() => { setDeleteOpen(false); setDeleteConfirmation(""); }} className="h-9 px-3 text-[10px] font-semibold text-[#d0d6d6]/45 hover:text-white">Cancel</button><button type="button" onClick={removeAccount} disabled={deleteConfirmation !== "DELETE" || accountBusy} className="flex h-9 items-center gap-2 rounded-xl bg-rose-300/85 px-4 text-[10px] font-bold text-[#041421] disabled:opacity-35">{accountBusy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />} Delete permanently</button></div></div>}
+          </ProfileSection>
+
+          <div className="sticky bottom-0 -mx-5 flex items-center gap-3 border-t border-white/[0.07] bg-[#041421]/92 px-5 py-4 backdrop-blur-xl sm:-mx-7 sm:px-7">{status && <p className={`mr-auto text-[10px] ${status.includes("saved") || status.includes("downloaded") ? "text-[#86b9b0]" : "text-rose-200/70"}`}>{status}</p>}<button onClick={onClose} className="h-11 rounded-xl px-4 text-xs font-semibold text-[#d0d6d6]/45 hover:text-white">Cancel</button><button onClick={submit} disabled={saving || accountBusy} className="flex h-11 items-center gap-2 rounded-xl bg-[#86b9b0] px-5 text-xs font-bold text-[#041421] disabled:opacity-50">{saving ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />} Save profile</button></div>
         </div>
       </aside>
     </>

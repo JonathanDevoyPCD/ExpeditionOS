@@ -1,12 +1,14 @@
 "use client";
 
 import { CheckCircle2, LoaderCircle, LockKeyhole, Mail, Mountain, Phone, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import ExpeditionDashboard from "@/components/dashboard/ExpeditionDashboard";
 import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { loadProfile } from "@/lib/profiles";
+import { getSiteUrl } from "@/lib/siteUrl";
 import type { ExpeditionProfile, OtpChannel } from "@/types/profile";
 
 type Mode = "signin" | "signup";
@@ -109,7 +111,7 @@ function OtpAccess() {
       email: email.trim().toLowerCase(),
       options: {
         shouldCreateUser: mode === "signup",
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: getSiteUrl(),
         data: mode === "signup" ? {
           first_name: firstName.trim(),
           last_name: lastName.trim(),
@@ -183,7 +185,7 @@ function OtpAccess() {
             ) : (
               <div className="mt-7 space-y-4"><AuthField label="Six-digit code" inputMode="numeric" value={code} onChange={(next) => setCode(next.replace(/\D/g, "").slice(0, 6))} placeholder="000000" />{error && <p className="rounded-xl border border-rose-300/15 bg-rose-300/[0.07] px-4 py-3 text-xs text-rose-100/75">{error}</p>}<button onClick={verifyCode} disabled={loading} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#86b9b0] text-xs font-bold text-[#041421] disabled:opacity-50">{loading ? <LoaderCircle className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />} Verify and continue</button><button onClick={() => setStep("details")} className="h-10 w-full text-xs text-[#d0d6d6]/45 hover:text-white">Use a different email</button></div>
             )}
-            <p className="mt-7 text-center text-[9px] leading-4 text-[#d0d6d6]/25">By continuing, you agree to store your expedition profile securely. Travel and medical details are optional and private by default.</p>
+            <p className="mt-7 text-center text-[9px] leading-4 text-[#d0d6d6]/30">By continuing, you agree to the <Link href="/terms" className="text-[#86b9b0]/75 hover:text-[#86b9b0]">Terms</Link> and acknowledge the <Link href="/privacy" className="text-[#86b9b0]/75 hover:text-[#86b9b0]">Privacy notice</Link>. Travel and medical details are optional and private by default.</p>
           </div>
         </section>
       </div>

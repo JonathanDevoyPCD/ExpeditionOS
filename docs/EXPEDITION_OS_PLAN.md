@@ -326,7 +326,7 @@ Every user-owned record must carry a user identifier. Strava access and refresh 
 - adventure-race simulation;
 - equipment maintenance predictions.
 
-Natural-language and manual route generation, durable authenticated persistence and trip-level access control are now part of the prototype. Production launch still requires managed or self-hosted routing/geocoding capacity, SMTP/SMS provider decisions, privacy and retention workflows, and stronger route-access and surface validation.
+Natural-language and manual route generation, durable authenticated persistence, trip-level access control, alpha legal pages, account export/deletion and a Vercel deployment health check are now part of the prototype. The hosted alpha uses the `expedition-os` Vercel project at `https://expedition-os-mocha.vercel.app`; that exact origin must remain configured in Supabase Auth. Production launch still requires managed or self-hosted routing/geocoding capacity, SMTP/SMS provider decisions, formal privacy and retention review, and stronger route-access and surface validation.
 
 ## 10. Delivery plan and acceptance criteria
 

@@ -77,13 +77,15 @@ Still required before a public production launch:
 - configure custom SMTP and a branded email template if six-digit email codes are preferred over Supabase's default secure sign-in link;
 - configure a supported SMS provider and phone verification before enabling contact-number OTP;
 - send transactional invitation emails through a server-side Edge Function or email provider; invitations currently appear inside ExpeditionOS when the invited email signs in;
-- add account export and deletion, retention rules, consent copy, audit logging and a POPIA information-impact assessment before relying on the travel-document or medical fields;
+- complete a formal retention policy, legal review, audit logging and a POPIA information-impact assessment before relying on the travel-document or medical fields. Privacy and Terms pages, JSON account export and authenticated self-service deletion are implemented in the alpha;
 - add application-level encryption or a dedicated secrets workflow if the product later needs stronger protection than platform encryption plus RLS for ID, passport and medical-aid numbers;
 - test the complete sign-up and invitation flows with two real email accounts after production Auth redirect URLs and SMTP are configured.
 
 ## Hosted deployment
 
 **Use Vercel or another Next.js server host, not GitHub Pages.** ExpeditionOS has dynamic server routes for OpenAI, Google Places, map tiles, geocoding and route building, which cannot run on static GitHub Pages. A public GitHub repository can still remain the source of truth while Vercel deploys it to an `expeditionos` subdomain or custom `.io` domain. Add that exact URL to the Supabase Auth redirect allow-list.
+
+**Alpha status:** The production Vercel project is `expedition-os`, connected to `JonathanDevoyPCD/ExpeditionOS`, with the canonical alpha URL `https://expedition-os-mocha.vercel.app`. Keep that exact origin in Supabase Auth and as `SITE_URL`. Custom SMTP remains necessary for users outside the Supabase project team.
 
 ## Hosted offline maps
 
