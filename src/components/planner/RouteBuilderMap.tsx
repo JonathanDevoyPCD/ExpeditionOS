@@ -5,7 +5,7 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import BaseLayerPicker from "@/components/map/BaseLayerPicker";
-import { applyBaseMapLayer, BASE_MAP_STYLE, isGoogleBaseLayer } from "@/lib/baseMapStyle";
+import { applyBaseMapLayer, BASE_MAP_STYLE, installAlternativeBaseLayers, isGoogleBaseLayer } from "@/lib/baseMapStyle";
 import type { RouteAnchor } from "@/types/adventure";
 import type { BaseMapLayer, MapLayerAvailability } from "@/types/baseMap";
 import type { MapPlace, MapViewport } from "@/types/mapPlace";
@@ -119,6 +119,7 @@ export default function RouteBuilderMap({
       });
     };
     map.on("load", () => {
+      installAlternativeBaseLayers(map);
       map.addSource("builder-route", { type: "geojson", data: routeData(null, []) });
       map.addLayer({
         id: "builder-route-glow",
@@ -150,7 +151,7 @@ export default function RouteBuilderMap({
         type: "symbol",
         source: "explore-places",
         filter: ["has", "point_count"],
-        layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 11 },
+        layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 11 },
         paint: { "text-color": "#ffffff" },
       });
       map.addLayer({

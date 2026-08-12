@@ -5,7 +5,7 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import BaseLayerPicker from "@/components/map/BaseLayerPicker";
-import { applyBaseMapLayer, BASE_MAP_STYLE } from "@/lib/baseMapStyle";
+import { applyBaseMapLayer, BASE_MAP_STYLE, installAlternativeBaseLayers } from "@/lib/baseMapStyle";
 import type { BaseMapLayer, MapLayerAvailability } from "@/types/baseMap";
 import type { PoiCategory, RoutePoi } from "@/types/poi";
 import type { RouteDataset, RoutePoint } from "@/types/route";
@@ -99,6 +99,7 @@ export default function ExpeditionMap({
     const markers: maplibregl.Marker[] = [];
 
     map.on("load", () => {
+      installAlternativeBaseLayers(map);
       map.addSource("expedition-route", {
         type: "geojson",
         data: {
@@ -152,7 +153,7 @@ export default function ExpeditionMap({
         type: "symbol",
         source: "expedition-pois",
         filter: ["has", "point_count"],
-        layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 11 },
+        layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 11 },
         paint: { "text-color": "#ffffff" },
       });
       map.addLayer({

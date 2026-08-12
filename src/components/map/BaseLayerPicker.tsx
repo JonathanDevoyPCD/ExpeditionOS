@@ -5,7 +5,7 @@ import { useState, type ComponentType } from "react";
 import type { BaseMapLayer } from "@/types/baseMap";
 
 const options: Array<{ id: BaseMapLayer; label: string; icon: ComponentType<{ className?: string }> }> = [
-  { id: "default", label: "Default", icon: Map },
+  { id: "default", label: "Liberty", icon: Map },
   { id: "topographic", label: "Topographic", icon: Layers3 },
   { id: "terrain", label: "Terrain", icon: Mountain },
   { id: "satellite", label: "Satellite", icon: Satellite },
