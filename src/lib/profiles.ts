@@ -60,14 +60,12 @@ export async function saveProfile(profile: ExpeditionProfile) {
   const nullable = (input: string) => input.trim() || null;
 
   const results = await Promise.all([
-    supabase.from("profiles").upsert({
-      id: profile.id,
+    supabase.from("profiles").update({
       first_name: profile.firstName.trim(),
       last_name: profile.lastName.trim(),
       display_name: displayName,
-    }),
-    supabase.from("profile_private_details").upsert({
-      user_id: profile.id,
+    }).eq("id", profile.id),
+    supabase.from("profile_private_details").update({
       preferred_otp_channel: profile.preferredOtpChannel,
       gender: nullable(profile.gender),
       gender_description: nullable(profile.genderDescription),
@@ -77,14 +75,12 @@ export async function saveProfile(profile: ExpeditionProfile) {
       city: nullable(profile.city),
       province: nullable(profile.province),
       country: profile.country.trim() || "South Africa",
-    }),
-    supabase.from("profile_travel_documents").upsert({
-      user_id: profile.id,
+    }).eq("user_id", profile.id),
+    supabase.from("profile_travel_documents").update({
       sa_id_number: nullable(profile.saIdNumber),
       passport_number: nullable(profile.passportNumber),
-    }),
-    supabase.from("profile_emergency_details").upsert({
-      user_id: profile.id,
+    }).eq("user_id", profile.id),
+    supabase.from("profile_emergency_details").update({
       emergency_contact_name: nullable(profile.emergencyContactName),
       emergency_contact_phone: nullable(profile.emergencyContactPhone),
       medical_aid_name: nullable(profile.medicalAidName),
@@ -94,10 +90,10 @@ export async function saveProfile(profile: ExpeditionProfile) {
       doctor_name: nullable(profile.doctorName),
       doctor_phone: nullable(profile.doctorPhone),
       additional_information: nullable(profile.additionalInformation),
-    }),
+    }).eq("user_id", profile.id),
   ]);
 
   const error = results.find((result) => result.error)?.error;
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return { ...profile, displayName };
 }
