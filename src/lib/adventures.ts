@@ -24,6 +24,11 @@ export function saveAdventure(adventure: AdventurePlan) {
   return next;
 }
 
+export function replaceLocalAdventures(adventures: AdventurePlan[]) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(adventures.slice(0, MAX_ADVENTURES)));
+  return adventures;
+}
+
 export function deleteAdventure(id: string) {
   const next = loadAdventures().filter((item) => item.id !== id);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));

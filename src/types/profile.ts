@@ -1,0 +1,31 @@
+export type OtpChannel = "email" | "sms";
+
+export type ExpeditionProfile = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  email: string;
+  phone: string;
+  preferredOtpChannel: OtpChannel;
+  phoneVerified: boolean;
+  gender: string;
+  genderDescription: string;
+  dateOfBirth: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  province: string;
+  country: string;
+  saIdNumber: string;
+  passportNumber: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  medicalAidName: string;
+  medicalAidNumber: string;
+  bloodType: string;
+  allergies: string;
+  doctorName: string;
+  doctorPhone: string;
+  additionalInformation: string;
+};

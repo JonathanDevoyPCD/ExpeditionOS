@@ -28,12 +28,12 @@ import {
   Search,
   Settings,
   ShieldAlert,
+  LogOut,
   Sparkles,
   TentTree,
   Timer,
   Trash2,
   TrendingUp,
-  UserRound,
   X,
   Zap,
 } from "lucide-react";
@@ -42,10 +42,12 @@ import ElevationProfile from "@/components/dashboard/ElevationProfile";
 import AdventureCreator from "@/components/planner/AdventureCreator";
 import GooglePlaceDetailsCard from "@/components/places/GooglePlaceDetailsCard";
 import RouteLibrary from "@/components/routes/RouteLibrary";
-import { deleteAdventure, loadAdventures, saveAdventure } from "@/lib/adventures";
+import { deleteAdventure, loadAdventures, replaceLocalAdventures, saveAdventure } from "@/lib/adventures";
+import { cloudAdventureId, deleteCloudAdventure, loadCloudAdventures, saveCloudAdventure } from "@/lib/cloudAdventures";
 import { buildItinerary, buildItineraryGpx, findItineraryWarnings, formatClock, suggestRouteStops } from "@/lib/itinerary";
 import type { AnalysisResponse, RouteAnalysis } from "@/types/analysis";
 import type { AdventurePlan } from "@/types/adventure";
+import type { ExpeditionProfile } from "@/types/profile";
 import { POI_CATEGORIES, type PoiCategory, type PoiDataset, type RoutePoi } from "@/types/poi";
 import type { RouteDataset, RoutePoint } from "@/types/route";
 
@@ -133,11 +135,17 @@ function Sidebar({
   onChange,
   open,
   onClose,
+  profile,
+  onOpenProfile,
+  onSignOut,
 }: {
   active: string;
   onChange: (label: string) => void;
   open: boolean;
   onClose: () => void;
+  profile: ExpeditionProfile;
+  onOpenProfile: () => void;
+  onSignOut: () => void;
 }) {
   return (
     <aside
@@ -205,9 +213,17 @@ function Sidebar({
           <p className="mt-2 text-xs leading-5 text-[#d0d6d6]/48">Connect Strava to compare this route with your recent training.</p>
           <button className="mt-3 text-[11px] font-semibold text-[#d0d6d6] transition hover:text-white">Connect account →</button>
         </div>
-        <button className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[13px] font-medium text-[#d0d6d6]/48 transition hover:bg-white/[0.045] hover:text-white">
+        <button onClick={onOpenProfile} className="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-white/[0.045]">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#86b9b0]/12 text-xs font-bold text-[#86b9b0]">{profile.firstName.slice(0, 1)}{profile.lastName.slice(0, 1)}</span>
+          <span className="min-w-0"><span className="block truncate text-xs font-semibold text-white">{profile.displayName || profile.firstName}</span><span className="block truncate text-[9px] text-[#d0d6d6]/30">Profile & safety</span></span>
+        </button>
+        <button onClick={onOpenProfile} className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[12px] font-medium text-[#d0d6d6]/48 transition hover:bg-white/[0.045] hover:text-white">
           <Settings className="size-[18px] text-[#4c7273]" strokeWidth={1.8} />
           Settings
+        </button>
+        <button onClick={onSignOut} className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[12px] font-medium text-[#d0d6d6]/35 transition hover:bg-white/[0.045] hover:text-rose-100">
+          <LogOut className="size-[18px] text-[#4c7273]" strokeWidth={1.8} />
+          Sign out
         </button>
       </div>
     </aside>
@@ -376,7 +392,7 @@ function AnalysisDrawer({
   );
 }
 
-export default function ExpeditionDashboard() {
+export default function ExpeditionDashboard({ userId, profile, onOpenProfile, onSignOut }: { userId: string; profile: ExpeditionProfile; onOpenProfile: () => void; onSignOut: () => void }) {
   const [route, setRoute] = useState<RouteDataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeNav, setActiveNav] = useState("Dashboard");
@@ -404,6 +420,31 @@ export default function ExpeditionDashboard() {
   const [copilotQuestion, setCopilotQuestion] = useState("");
   const [adventures, setAdventures] = useState<AdventurePlan[]>(loadAdventures);
   const [editingAdventure, setEditingAdventure] = useState<AdventurePlan | null>(null);
+  const [cloudStatus, setCloudStatus] = useState("Syncing routes…");
+
+  useEffect(() => {
+    let active = true;
+    async function syncRoutes() {
+      try {
+        const local = loadAdventures();
+        let cloud = await loadCloudAdventures(userId);
+        const cloudIds = new Set(cloud.map((adventure) => adventure.id));
+        const pendingImports = local.filter((adventure) => !cloudIds.has(adventure.access ? adventure.id : cloudAdventureId(adventure.id, userId)));
+        if (pendingImports.length) {
+          await Promise.all(pendingImports.map((adventure) => saveCloudAdventure(adventure, userId)));
+          cloud = await loadCloudAdventures(userId);
+        }
+        if (active) {
+          setAdventures(replaceLocalAdventures(cloud));
+          setCloudStatus(pendingImports.length ? `${pendingImports.length} browser route${pendingImports.length === 1 ? "" : "s"} moved to your account` : "Routes synced securely");
+        }
+      } catch {
+        if (active) setCloudStatus("Offline — browser copy in use");
+      }
+    }
+    syncRoutes();
+    return () => { active = false; };
+  }, [userId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -550,7 +591,7 @@ export default function ExpeditionDashboard() {
     setActiveNav("Dashboard");
   }
 
-  function storeAdventure(adventure: AdventurePlan, initialPois: PoiDataset | null) {
+  async function storeAdventure(adventure: AdventurePlan, initialPois: PoiDataset | null) {
     setAdventures(saveAdventure(adventure));
     setRoute(adventure.route);
     setPoiDataset(initialPois);
@@ -559,6 +600,14 @@ export default function ExpeditionDashboard() {
     setFocusPoint(null);
     setEditingAdventure(null);
     setActiveNav("Dashboard");
+    setCloudStatus("Saving route…");
+    try {
+      await saveCloudAdventure(adventure, userId);
+      setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId)));
+      setCloudStatus("Route saved to your account");
+    } catch {
+      setCloudStatus("Cloud save failed — browser copy retained");
+    }
   }
 
   function editCurrentRoute() {
@@ -587,8 +636,20 @@ export default function ExpeditionDashboard() {
     setActiveNav(label);
   }
 
-  function removeAdventure(id: string) {
+  async function removeAdventure(id: string) {
     setAdventures(deleteAdventure(id));
+    try {
+      await deleteCloudAdventure(id);
+      setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId)));
+      setCloudStatus("Route removed");
+    } catch {
+      setCloudStatus("Only trip owners can remove shared routes");
+    }
+  }
+
+  async function refreshCloudRoutes() {
+    setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId)));
+    setCloudStatus("Routes synced securely");
   }
 
   function exportItinerary() {
@@ -621,12 +682,14 @@ export default function ExpeditionDashboard() {
 
   const metrics = route.metrics;
   const selectedPoint = focusPoint ?? summitPoint;
+  const activeAdventure = adventures.find((adventure) => adventure.route.id === route.id);
+  const canEditActiveRoute = activeAdventure?.access?.role !== "viewer";
 
   if (activeNav === "Plan adventure" || activeNav === "My routes") {
     return (
       <div className="min-h-screen bg-[#041421] text-[#d0d6d6] lg:flex">
         {sidebarOpen && <button className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close navigation overlay" />}
-        <Sidebar active={activeNav} onChange={navigate} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar active={activeNav} onChange={navigate} open={sidebarOpen} onClose={() => setSidebarOpen(false)} profile={profile} onOpenProfile={onOpenProfile} onSignOut={onSignOut} />
         <main className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 flex h-[76px] items-center gap-3 border-b border-white/[0.06] bg-[#041421]/88 px-4 backdrop-blur-xl sm:px-6 xl:px-8">
             <button onClick={() => setSidebarOpen(true)} className="grid size-10 place-items-center rounded-xl border border-white/[0.07] bg-[#042630] text-[#d0d6d6]/70 lg:hidden" aria-label="Open navigation"><Menu className="size-5" /></button>
@@ -636,7 +699,7 @@ export default function ExpeditionDashboard() {
           </header>
           {activeNav === "Plan adventure"
             ? <AdventureCreator initialAdventure={editingAdventure} onCancel={() => { setEditingAdventure(null); setActiveNav("Dashboard"); }} onSave={storeAdventure} />
-            : <RouteLibrary adventures={adventures} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} />}
+            : <RouteLibrary adventures={adventures} syncStatus={cloudStatus} currentUserId={userId} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} onRefresh={refreshCloudRoutes} />}
         </main>
       </div>
     );
@@ -645,7 +708,7 @@ export default function ExpeditionDashboard() {
   return (
     <div className="min-h-screen bg-[#041421] text-[#d0d6d6] lg:flex">
       {sidebarOpen && <button className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close navigation overlay" />}
-      <Sidebar active={activeNav} onChange={navigate} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar active={activeNav} onChange={navigate} open={sidebarOpen} onClose={() => setSidebarOpen(false)} profile={profile} onOpenProfile={onOpenProfile} onSignOut={onSignOut} />
 
       <main className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 flex h-[76px] items-center gap-3 border-b border-white/[0.06] bg-[#041421]/88 px-4 backdrop-blur-xl sm:px-6 xl:px-8">
@@ -673,8 +736,8 @@ export default function ExpeditionDashboard() {
             <Bell className="size-[18px]" strokeWidth={1.7} />
             <span className="absolute right-2.5 top-2.5 size-1.5 rounded-full bg-[#86b9b0]" />
           </button>
-          <button className="flex items-center gap-2 rounded-xl p-1.5 pr-2 text-left transition hover:bg-white/[0.04]">
-            <span className="grid size-8 place-items-center rounded-lg bg-[#4c7273]/30 text-[#86b9b0]"><UserRound className="size-4" /></span>
+          <button onClick={onOpenProfile} className="flex items-center gap-2 rounded-xl p-1.5 pr-2 text-left transition hover:bg-white/[0.04]">
+            <span className="grid size-8 place-items-center rounded-lg bg-[#4c7273]/30 text-[10px] font-bold text-[#86b9b0]">{profile.firstName.slice(0, 1)}{profile.lastName.slice(0, 1)}</span>
             <ChevronDown className="hidden size-3.5 text-[#d0d6d6]/35 sm:block" />
           </button>
         </header>
@@ -690,9 +753,9 @@ export default function ExpeditionDashboard() {
               <p className="mt-2 text-sm text-[#d0d6d6]/45">A live workspace for elevation, mapped services, route intelligence and itinerary planning.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={editCurrentRoute} className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/72 px-4 text-xs font-semibold text-[#d0d6d6]/72 transition hover:border-[#86b9b0]/24 hover:text-white">
+              {canEditActiveRoute && <button onClick={editCurrentRoute} className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/72 px-4 text-xs font-semibold text-[#d0d6d6]/72 transition hover:border-[#86b9b0]/24 hover:text-white">
                 <PencilLine className="size-4 text-[#86b9b0]" /> Edit route
-              </button>
+              </button>}
               <button className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/72 px-4 text-xs font-semibold text-[#d0d6d6]/72 transition hover:border-[#86b9b0]/24 hover:text-white">
                 <CalendarDays className="size-4 text-[#86b9b0]" />
                 Set trip date

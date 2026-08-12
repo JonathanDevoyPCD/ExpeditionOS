@@ -1,5 +1,5 @@
-import ExpeditionDashboard from "@/components/dashboard/ExpeditionDashboard";
+import AuthGate from "@/components/auth/AuthGate";
 
 export default function Home() {
-  return <ExpeditionDashboard />;
+  return <AuthGate />;
 }

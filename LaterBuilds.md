@@ -68,19 +68,22 @@ Booking.com Demand API access requires affiliate approval and credentials. Until
 
 Once configured, ExpeditionOS can compare planned routes with recent training load and personalize feasibility advice. The application must store tokens privately and respect Strava API limits and display requirements.
 
-## Supabase persistence and authentication
+## Account services still to add
 
-**Credentials prepared, integration deferred:** `.env.local` now contains the Supabase project URL, publishable key, secret key and JWKS URL. ExpeditionOS does not yet initialize a Supabase client or make database requests.
+**Core Supabase integration is implemented:** Passwordless email access, per-user profiles and routes, owner/editor/viewer trip membership, invitations and opt-in emergency sharing now use versioned migrations and row-level security. The secret key remains server-only. A live rolled-back two-user test confirms that route membership never exposes contact information or travel documents, and that emergency data remains hidden until the user opts in for that trip.
 
-When persistence work begins:
+Still required before a public production launch:
 
-- keep `SUPABASE_SECRET_KEY` server-only and never introduce it through a `NEXT_PUBLIC_` variable;
-- use the publishable key for deliberately public browser operations only;
-- model adventures, route anchors, itinerary stops and user settings as per-user records rather than a shared state document;
-- enable RLS on every exposed table and scope policies to `(select auth.uid()) = user_id`;
-- include both `USING` and `WITH CHECK` on ownership-protected update policies;
-- explicitly grant Data API access if the project's current Data API settings do not expose new tables automatically;
-- add migrations and authenticated two-user isolation tests before replacing local browser storage.
+- configure custom SMTP and a branded email template if six-digit email codes are preferred over Supabase's default secure sign-in link;
+- configure a supported SMS provider and phone verification before enabling contact-number OTP;
+- send transactional invitation emails through a server-side Edge Function or email provider; invitations currently appear inside ExpeditionOS when the invited email signs in;
+- add account export and deletion, retention rules, consent copy, audit logging and a POPIA information-impact assessment before relying on the travel-document or medical fields;
+- add application-level encryption or a dedicated secrets workflow if the product later needs stronger protection than platform encryption plus RLS for ID, passport and medical-aid numbers;
+- test the complete sign-up and invitation flows with two real email accounts after production Auth redirect URLs and SMTP are configured.
+
+## Hosted deployment
+
+**Use Vercel or another Next.js server host, not GitHub Pages.** ExpeditionOS has dynamic server routes for OpenAI, Google Places, map tiles, geocoding and route building, which cannot run on static GitHub Pages. A public GitHub repository can still remain the source of truth while Vercel deploys it to an `expeditionos` subdomain or custom `.io` domain. Add that exact URL to the Supabase Auth redirect allow-list.
 
 ## Hosted offline maps
 

@@ -26,7 +26,12 @@ The first working slice includes:
 - On-demand Google Places verification for selected named places, including current open status, weekly hours, user rating counts, phone, website and Google Maps links.
 - Editable route anchors, cycling preferences and colour-coded day-stage previews.
 - Route-aware OpenStreetMap lodging, food, fuel, grocery and service discovery.
-- A private browser-local route library that reopens generated routes in the dashboard.
+- Passwordless Supabase accounts with first name, last name, email, contact number and a saved OTP preference.
+- A private profile for address, travel documents, medical aid, allergies, blood type, doctor and emergency contacts.
+- Per-user cloud route libraries with automatic import of existing browser-local routes.
+- Trip collaboration with owner, editor and viewer roles, in-app invitations and member removal.
+- Explicit per-trip emergency-profile sharing; contact details and travel documents remain owner-only.
+- Row-level security on every exposed table, validated with a rolled-back two-user isolation test.
 
 ## Run locally
 
@@ -46,6 +51,16 @@ npm run dev:3010
 Then open `http://localhost:3010`.
 
 Use `npm run typecheck`, `npm run lint`, and `npm run build` before shipping changes.
+
+## Account and OTP setup
+
+ExpeditionOS uses the Supabase publishable key in the browser. The secret key is never included in client bundles. Add the local and production application URLs to the Supabase Auth redirect allow-list.
+
+Email is the canonical identity. The app works with Supabase's default secure sign-in link and also accepts a six-digit email code when the project's email template contains `{{ .Token }}`. New Supabase Free projects require custom SMTP before auth email templates can be customized.
+
+SMS preference is captured at signup, but SMS delivery stays disabled until an SMS provider is configured in Supabase Auth. After that configuration is complete, set `SUPABASE_PHONE_OTP_ENABLED=true` and add the phone-verification step before offering phone sign-in.
+
+SA ID, passport, medical and emergency fields are optional. They should not be collected in production until a privacy policy, retention/deletion process and POPIA information-impact assessment have been completed.
 
 ## Private provider configuration
 

@@ -60,4 +60,8 @@ export type AdventurePlan = {
   anchors: RouteAnchor[];
   blueprint?: CopilotBlueprint;
   preferences?: RoutePreferences;
+  access?: {
+    ownerId: string;
+    role: "owner" | "editor" | "viewer";
+  };
 };

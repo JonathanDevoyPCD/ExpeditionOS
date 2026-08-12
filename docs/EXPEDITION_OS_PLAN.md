@@ -1,10 +1,10 @@
 # Expedition OS Product and Technical Plan
 
-Status: Working plan v0.2
+Status: Working plan v0.3
 
-Date: 11 August 2026
+Date: 12 August 2026
 
-Initial audience: one rider using their own Strava history
+Initial audience: a primary rider plus invited trip planners and participants
 
 Primary platform: responsive web application
 
@@ -26,7 +26,11 @@ Implemented locally:
 - on-demand Google Places matching for selected named places with attributed ratings, current open status, weekly hours and official links;
 - draggable and reorderable anchors, road/bike/hill preferences and visual multi-day route segments;
 - real OpenStreetMap lodging, food, fuel, grocery, water and service candidates around the final route;
-- private browser-local route library for up to 12 adventures;
+- passwordless Supabase accounts and full private rider profiles;
+- per-user cloud route libraries with browser-route migration;
+- owner, editor and viewer trip membership with email-address invitations;
+- owner-only contact and travel-document records, plus per-trip opt-in emergency sharing;
+- RLS-protected persistence verified with two-user isolation assertions;
 - shared route analysis and GPX export for uploaded, manual and Copilot routes.
 
 ## 1. Executive decision
@@ -299,8 +303,8 @@ Every user-owned record must carry a user identifier. Strava access and refresh 
 - natural-language route generation and editable route anchors;
 - bicycle route calculation and elevation enrichment;
 - OpenStreetMap water, shops, accommodation and resupply discovery;
-- browser-local saved route library for the current private prototype;
-- personal sign-in and one connected Strava account;
+- authenticated per-user route library with trip sharing;
+- personal sign-in, private profile and one connected Strava account;
 - Strava OAuth, historical activity backfill and webhook updates;
 - capability profile for rides and mountain-bike rides;
 - GPX upload, validation and map preview;
@@ -318,11 +322,11 @@ Every user-owned record must carry a user identifier. Strava access and refresh 
 - automatic rerouting in the field;
 - medical, injury or recovery advice;
 - emergency tracking or SOS features;
-- team and social features;
+- public social feeds, clubs and broad team-management features;
 - adventure-race simulation;
 - equipment maintenance predictions.
 
-Natural-language and manual route generation are now part of the prototype. Production launch still requires managed or self-hosted routing/geocoding capacity, durable authenticated persistence, and stronger route-access and surface validation.
+Natural-language and manual route generation, durable authenticated persistence and trip-level access control are now part of the prototype. Production launch still requires managed or self-hosted routing/geocoding capacity, SMTP/SMS provider decisions, privacy and retention workflows, and stronger route-access and surface validation.
 
 ## 10. Delivery plan and acceptance criteria
 

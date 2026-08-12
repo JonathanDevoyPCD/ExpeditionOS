@@ -347,6 +347,7 @@ export default function AdventureCreator({
       anchors,
       blueprint: blueprint ?? undefined,
       preferences,
+      access: initialAdventure?.access,
     }, poiDataset);
   }
 
