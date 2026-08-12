@@ -2,6 +2,7 @@ export const POI_CATEGORIES = [
   "fuel",
   "food",
   "groceries",
+  "shopping",
   "water",
   "repair",
   "pharmacy",
@@ -17,6 +18,7 @@ export type RoutePoi = {
   osmType: "node" | "way" | "relation";
   osmId: number;
   name: string;
+  hasMappedName: boolean;
   category: PoiCategory;
   subcategory: string;
   lat: number;
@@ -26,6 +28,9 @@ export type RoutePoi = {
   openingHours?: string;
   phone?: string;
   website?: string;
+  address?: string;
+  classificationStars?: number;
+  bookingSearchUrl?: string;
   source: "openstreetmap";
 };
 

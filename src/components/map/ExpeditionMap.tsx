@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
-import type { GeoJSONSource, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
+import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import BaseLayerPicker from "@/components/map/BaseLayerPicker";
+import { applyBaseMapLayer, BASE_MAP_STYLE } from "@/lib/baseMapStyle";
+import type { BaseMapLayer, MapLayerAvailability } from "@/types/baseMap";
 import type { PoiCategory, RoutePoi } from "@/types/poi";
 import type { RouteDataset, RoutePoint } from "@/types/route";
 
@@ -18,26 +21,13 @@ type ExpeditionMapProps = {
   onSelectPoi: (poi: RoutePoi | null) => void;
 };
 
-const MAP_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {
-    "open-street-map": {
-      type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: "© OpenStreetMap contributors",
-    },
-  },
-  layers: [{ id: "open-street-map", type: "raster", source: "open-street-map" }],
-};
-
-const OSM_MAX_ZOOM = 19;
+const MAP_MAX_ZOOM = 22;
 const TERRAIN_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
 const POI_COLORS: Record<PoiCategory, string> = {
   fuel: "#f2b766",
   food: "#d87979",
   groceries: "#86b9b0",
+  shopping: "#e4a6c8",
   water: "#55a8d7",
   repair: "#9d83c6",
   pharmacy: "#e66b7b",
@@ -76,6 +66,8 @@ export default function ExpeditionMap({
   const plannedPoiIdsRef = useRef(plannedPoiIds);
   const selectPoiRef = useRef(onSelectPoi);
   const initialTerrainEnabled = useRef(terrainEnabled);
+  const [baseLayer, setBaseLayer] = useState<BaseMapLayer>("default");
+  const [googleTilesAvailable, setGoogleTilesAvailable] = useState(false);
 
   useEffect(() => {
     poisRef.current = pois;
@@ -89,10 +81,10 @@ export default function ExpeditionMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE,
+      style: BASE_MAP_STYLE,
       center: [route.start.lon, route.start.lat],
       zoom: 11,
-      maxZoom: OSM_MAX_ZOOM,
+      maxZoom: MAP_MAX_ZOOM,
       pitch: initialTerrainEnabled.current ? 56 : 0,
       bearing: initialTerrainEnabled.current ? -18 : 0,
     });
@@ -188,6 +180,7 @@ export default function ExpeditionMap({
             "fuel", POI_COLORS.fuel,
             "food", POI_COLORS.food,
             "groceries", POI_COLORS.groceries,
+            "shopping", POI_COLORS.shopping,
             "water", POI_COLORS.water,
             "repair", POI_COLORS.repair,
             "pharmacy", POI_COLORS.pharmacy,
@@ -262,6 +255,22 @@ export default function ExpeditionMap({
   }, [route]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/map/layers", { signal: controller.signal })
+      .then((response) => response.json() as Promise<MapLayerAvailability>)
+      .then((result) => setGoogleTilesAvailable(result.googleTiles))
+      .catch(() => setGoogleTilesAvailable(false));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const update = () => applyBaseMapLayer(map, baseLayer, googleTilesAvailable);
+    if (map.isStyleLoaded()) update(); else map.once("load", update);
+  }, [baseLayer, googleTilesAvailable]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map?.isStyleLoaded() || !map.getSource("terrain-dem")) return;
     map.setTerrain(terrainEnabled ? { source: "terrain-dem", exaggeration: 1.35 } : null);
@@ -292,5 +301,5 @@ export default function ExpeditionMap({
     }
   }, [selectedPoiId, pois]);
 
-  return <div ref={containerRef} className="h-full min-h-[420px] w-full" aria-label="Interactive expedition route map" />;
+  return <div className="relative h-full min-h-[420px] w-full"><div ref={containerRef} className="h-full min-h-[420px] w-full" aria-label="Interactive expedition route map" /><BaseLayerPicker active={baseLayer} googleAvailable={googleTilesAvailable} onChange={setBaseLayer} /></div>;
 }

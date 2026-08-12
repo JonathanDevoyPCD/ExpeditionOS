@@ -2,6 +2,12 @@ import type { RouteDataset } from "@/types/route";
 
 export type RouteAnchorKind = "start" | "via" | "overnight" | "finish";
 
+export type RoutePreferences = {
+  bicycleType: "Road" | "Hybrid" | "Mountain";
+  hillPreference: "balanced" | "avoid" | "embrace";
+  roadPreference: "balanced" | "avoid_major" | "prefer_roads";
+};
+
 export type RouteAnchor = {
   id: string;
   name: string;
@@ -53,4 +59,5 @@ export type AdventurePlan = {
   route: RouteDataset;
   anchors: RouteAnchor[];
   blueprint?: CopilotBlueprint;
+  preferences?: RoutePreferences;
 };

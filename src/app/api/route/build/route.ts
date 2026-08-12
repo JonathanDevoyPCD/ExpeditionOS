@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildBicycleRoute } from "@/lib/routeProviders";
-import type { RouteAnchor } from "@/types/adventure";
+import type { RouteAnchor, RoutePreferences } from "@/types/adventure";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,11 +11,11 @@ function validAnchor(value: RouteAnchor) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as { name?: string; anchors?: RouteAnchor[] };
+    const body = (await request.json()) as { name?: string; anchors?: RouteAnchor[]; preferences?: RoutePreferences };
     const anchors = body.anchors?.filter(validAnchor).slice(0, 12) ?? [];
     if (anchors.length < 2) return NextResponse.json({ error: "Add at least a start and finish." }, { status: 400 });
     const name = body.name?.trim().slice(0, 100) || `${anchors[0].name} to ${anchors.at(-1)!.name}`;
-    const route = await buildBicycleRoute(anchors, name, "OpenStreetMap routing via Valhalla · elevation via Open-Meteo");
+    const route = await buildBicycleRoute(anchors, name, "OpenStreetMap routing via Valhalla · elevation via Open-Meteo", body.preferences);
     return NextResponse.json({ route, anchors });
   } catch (error) {
     console.error("Bicycle route build failed", error instanceof Error ? error.message : "Unknown error");

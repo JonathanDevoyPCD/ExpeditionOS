@@ -2,60 +2,17 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { projectPointOntoRoute } from "@/lib/geo";
 import { parseGpx } from "@/lib/gpx";
-import type { PoiCategory, PoiDataset, RoutePoi } from "@/types/poi";
+import { mapPlaceFromElement, placeOverpassQuery, type OsmPlaceElement, type OverpassPlaceResponse } from "@/lib/placeData";
+import { googleApiKey } from "@/lib/googlePlaces";
+import type { PoiDataset, RoutePoi } from "@/types/poi";
 import type { RouteAnchor } from "@/types/adventure";
 import type { RouteDataset } from "@/types/route";
-
-type OsmElement = {
-  type: "node" | "way" | "relation";
-  id: number;
-  lat?: number;
-  lon?: number;
-  center?: { lat: number; lon: number };
-  tags?: Record<string, string>;
-};
-
-type OverpassResponse = {
-  osm3s?: { timestamp_osm_base?: string };
-  elements?: OsmElement[];
-};
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const OVERPASS_FALLBACK_URL = "https://overpass.kumi.systems/api/interpreter";
 const CACHE_MS = 30 * 60 * 1000;
-const cache = new Map<string, { expiresAt: number; elements: OsmElement[]; timestamp: string | null }>();
-const pending = new Map<string, Promise<{ elements: OsmElement[]; timestamp: string | null }>>();
-
-function categoryFor(tags: Record<string, string>): PoiCategory | null {
-  const amenity = tags.amenity;
-  const shop = tags.shop;
-  const tourism = tags.tourism;
-
-  if (amenity === "fuel") return "fuel";
-  if (["restaurant", "cafe", "fast_food", "marketplace"].includes(amenity) || ["bakery", "deli"].includes(shop)) return "food";
-  if (["supermarket", "convenience"].includes(shop)) return "groceries";
-  if (amenity === "drinking_water") return "water";
-  if (amenity === "bicycle_repair" || shop === "bicycle") return "repair";
-  if (amenity === "pharmacy") return "pharmacy";
-  if (amenity === "toilets") return "toilets";
-  if (["attraction", "viewpoint", "picnic_site"].includes(tourism)) return "attraction";
-  if (["hotel", "guest_house", "hostel", "camp_site"].includes(tourism)) return "lodging";
-  return null;
-}
-
-function fallbackName(category: PoiCategory) {
-  return {
-    fuel: "Fuel station",
-    food: "Food stop",
-    groceries: "Grocery stop",
-    water: "Drinking water",
-    repair: "Bicycle service",
-    pharmacy: "Pharmacy",
-    toilets: "Public toilets",
-    attraction: "Point of interest",
-    lodging: "Accommodation",
-  }[category];
-}
+const cache = new Map<string, { expiresAt: number; elements: OsmPlaceElement[]; timestamp: string | null }>();
+const pending = new Map<string, Promise<{ elements: OsmPlaceElement[]; timestamp: string | null }>>();
 
 function overpassQuery(bounds: [[number, number], [number, number]], paddingKm: number) {
   const [[west, south], [east, north]] = bounds;
@@ -63,11 +20,7 @@ function overpassQuery(bounds: [[number, number], [number, number]], paddingKm: 
   const latPadding = paddingKm / 111.32;
   const lonPadding = paddingKm / (111.32 * Math.max(Math.cos((middleLat * Math.PI) / 180), 0.2));
   const bbox = `${south - latPadding},${west - lonPadding},${north + latPadding},${east + lonPadding}`;
-  return `[out:json][timeout:35];(
-    nwr[amenity~"^(fuel|restaurant|cafe|fast_food|drinking_water|marketplace|toilets|pharmacy|bicycle_repair)$"](${bbox});
-    nwr[shop~"^(supermarket|convenience|bakery|deli|bicycle)$"](${bbox});
-    nwr[tourism~"^(attraction|viewpoint|picnic_site|hotel|guest_house|hostel|camp_site)$"](${bbox});
-  );out center tags;`;
+  return placeOverpassQuery(bbox);
 }
 
 function routeOverpassQuery(route: RouteDataset, anchors: RouteAnchor[] = []) {
@@ -97,7 +50,7 @@ async function fetchElements(route: RouteDataset, anchors: RouteAnchor[] = []) {
 
   const request = (async () => {
     const query = route.metrics.distanceKm > 140 ? routeOverpassQuery(route, anchors) : overpassQuery(route.bounds, 5);
-    let data: OverpassResponse | null = null;
+    let data: OverpassPlaceResponse | null = null;
     let lastStatus = 502;
     for (const endpoint of [OVERPASS_URL, OVERPASS_FALLBACK_URL]) {
       try {
@@ -112,7 +65,7 @@ async function fetchElements(route: RouteDataset, anchors: RouteAnchor[] = []) {
         });
         lastStatus = response.status;
         if (!response.ok) continue;
-        data = (await response.json()) as OverpassResponse;
+        data = (await response.json()) as OverpassPlaceResponse;
         if ((data.elements?.length ?? 0) > 0 || route.metrics.distanceKm <= 140) break;
       } catch {
         continue;
@@ -144,30 +97,16 @@ export async function getRoutePoisForRoute(route: RouteDataset, corridorKm = 1.5
   const { elements, timestamp } = await fetchElements(route, anchors);
 
   const items = elements.flatMap<RoutePoi>((element) => {
-    const lat = element.lat ?? element.center?.lat;
-    const lon = element.lon ?? element.center?.lon;
-    const tags = element.tags ?? {};
-    const category = categoryFor(tags);
-    if (lat === undefined || lon === undefined || !category) return [];
-
-    const projected = projectPointOntoRoute({ lat, lon }, route.points);
+    const place = mapPlaceFromElement(element);
+    if (!place || !place.osmType || place.osmId === undefined || place.source !== "openstreetmap") return [];
+    const projected = projectPointOntoRoute(place, route.points);
     if (projected.distanceFromRouteKm > corridorKm) return [];
-
-    const subcategory = tags.amenity ?? tags.shop ?? tags.tourism ?? category;
     return [{
-      id: `osm-${element.type}-${element.id}`,
-      osmType: element.type,
-      osmId: element.id,
-      name: tags.name ?? tags.brand ?? tags.operator ?? fallbackName(category),
-      category,
-      subcategory,
-      lat,
-      lon,
+      ...place,
+      osmType: place.osmType,
+      osmId: place.osmId,
+      source: "openstreetmap" as const,
       ...projected,
-      openingHours: tags.opening_hours,
-      phone: tags.phone ?? tags["contact:phone"],
-      website: tags.website ?? tags["contact:website"],
-      source: "openstreetmap",
     }];
   });
 
@@ -180,7 +119,7 @@ export async function getRoutePoisForRoute(route: RouteDataset, corridorKm = 1.5
     corridorKm,
     providers: {
       openstreetmap: "active",
-      google: process.env.GOOGLE_MAPS_API_KEY ? "configured" : "not_configured",
+      google: googleApiKey() ? "configured" : "not_configured",
     },
   };
 }

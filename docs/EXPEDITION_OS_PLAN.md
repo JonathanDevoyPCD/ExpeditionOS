@@ -19,7 +19,13 @@ Implemented locally:
 - bicycle routing through Valhalla, split into stages for long multi-day trips;
 - sampled route elevation through Open-Meteo;
 - GPT-5.6 Luna typed adventure blueprints with geocoded towns and overnight areas;
-- real OpenStreetMap lodging, food, fuel, grocery, water and service candidates around long-route anchors;
+- a pre-route OpenStreetMap discovery map with clustered, independently toggleable lodging, food, fuel, grocery, shopping, water, service and highlight layers;
+- Default, worldwide topographic, terrain, satellite and globe basemap modes with Google Map Tiles activation and OpenTopoMap fallback;
+- staged place discovery that renders a fast popular-place result set before broader community coverage completes;
+- mapped place details including contributor-supplied hours, contact details, websites and clearly labelled lodging classifications;
+- on-demand Google Places matching for selected named places with attributed ratings, current open status, weekly hours and official links;
+- draggable and reorderable anchors, road/bike/hill preferences and visual multi-day route segments;
+- real OpenStreetMap lodging, food, fuel, grocery, water and service candidates around the final route;
 - private browser-local route library for up to 12 adventures;
 - shared route analysis and GPX export for uploaded, manual and Copilot routes.
 
@@ -390,6 +396,9 @@ Acceptance criteria:
 - a prompt becomes a typed intent before any route is requested;
 - ambiguous starting points and destinations require confirmation;
 - the user can compare, adjust and reject candidates on the map;
+- the user can inspect and toggle useful places before choosing the route;
+- route anchors can be dragged, reordered and rebuilt with cycling preferences;
+- multi-day routes show colour-coded stages with per-day distance, ascent and moving-time estimates;
 - generated candidates use the same analysis engine as GPX routes;
 - missing access or surface data appears as an unknown, never as a positive assumption.
 
@@ -400,6 +409,8 @@ Add weather, daylight, water, resupply, accommodation and bailout enrichment.
 Acceptance criteria:
 
 - each external fact records its provider and retrieval time;
+- contributor-supplied opening hours are labelled as listed rather than guaranteed live status;
+- user ratings and booking availability are absent unless a licensed enrichment provider is configured;
 - forecast data is not presented as historical certainty;
 - stale or unavailable provider data degrades cleanly;
 - users can correct or add local knowledge without changing the underlying route facts.

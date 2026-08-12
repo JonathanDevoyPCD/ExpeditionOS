@@ -23,6 +23,7 @@ import {
   Mountain,
   Navigation,
   Plus,
+  PencilLine,
   Route,
   Search,
   Settings,
@@ -39,6 +40,7 @@ import {
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import ElevationProfile from "@/components/dashboard/ElevationProfile";
 import AdventureCreator from "@/components/planner/AdventureCreator";
+import GooglePlaceDetailsCard from "@/components/places/GooglePlaceDetailsCard";
 import RouteLibrary from "@/components/routes/RouteLibrary";
 import { deleteAdventure, loadAdventures, saveAdventure } from "@/lib/adventures";
 import { buildItinerary, buildItineraryGpx, findItineraryWarnings, formatClock, suggestRouteStops } from "@/lib/itinerary";
@@ -70,6 +72,7 @@ const poiLabels: Record<PoiCategory, string> = {
   fuel: "Fuel",
   food: "Food & cafés",
   groceries: "Groceries",
+  shopping: "Shops",
   water: "Drinking water",
   repair: "Bike repair",
   pharmacy: "Pharmacies",
@@ -82,6 +85,7 @@ const poiColors: Record<PoiCategory, string> = {
   fuel: "#f2b766",
   food: "#d87979",
   groceries: "#86b9b0",
+  shopping: "#e4a6c8",
   water: "#55a8d7",
   repair: "#9d83c6",
   pharmacy: "#e66b7b",
@@ -399,6 +403,7 @@ export default function ExpeditionDashboard() {
   const [analysisModel, setAnalysisModel] = useState<string | null>(null);
   const [copilotQuestion, setCopilotQuestion] = useState("");
   const [adventures, setAdventures] = useState<AdventurePlan[]>(loadAdventures);
+  const [editingAdventure, setEditingAdventure] = useState<AdventurePlan | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -537,6 +542,7 @@ export default function ExpeditionDashboard() {
   }
 
   function openAdventure(adventure: AdventurePlan) {
+    setEditingAdventure(null);
     setRoute(adventure.route);
     setAnalysis(null);
     setAnalysisPlaces([]);
@@ -551,7 +557,34 @@ export default function ExpeditionDashboard() {
     setAnalysis(null);
     setAnalysisPlaces([]);
     setFocusPoint(null);
+    setEditingAdventure(null);
     setActiveNav("Dashboard");
+  }
+
+  function editCurrentRoute() {
+    if (!route) return;
+    const saved = adventures.find((adventure) => adventure.route.id === route.id);
+    const now = new Date().toISOString();
+    setEditingAdventure(saved ?? {
+      id: `adventure-${route.id}`,
+      name: route.name,
+      description: "Imported GPX route ready for review and editing.",
+      source: "gpx",
+      createdAt: now,
+      updatedAt: now,
+      days: 1,
+      route,
+      anchors: [
+        { id: `anchor-${route.id}-start`, name: "Route start", lat: route.start.lat, lon: route.start.lon, kind: "start" },
+        { id: `anchor-${route.id}-finish`, name: "Route finish", lat: route.finish.lat, lon: route.finish.lon, kind: "finish" },
+      ],
+    });
+    setActiveNav("Plan adventure");
+  }
+
+  function navigate(label: string) {
+    if (label === "Plan adventure") setEditingAdventure(null);
+    setActiveNav(label);
   }
 
   function removeAdventure(id: string) {
@@ -593,17 +626,17 @@ export default function ExpeditionDashboard() {
     return (
       <div className="min-h-screen bg-[#041421] text-[#d0d6d6] lg:flex">
         {sidebarOpen && <button className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close navigation overlay" />}
-        <Sidebar active={activeNav} onChange={setActiveNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar active={activeNav} onChange={navigate} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <main className="min-w-0 flex-1">
           <header className="sticky top-0 z-30 flex h-[76px] items-center gap-3 border-b border-white/[0.06] bg-[#041421]/88 px-4 backdrop-blur-xl sm:px-6 xl:px-8">
             <button onClick={() => setSidebarOpen(true)} className="grid size-10 place-items-center rounded-xl border border-white/[0.07] bg-[#042630] text-[#d0d6d6]/70 lg:hidden" aria-label="Open navigation"><Menu className="size-5" /></button>
             <div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#86b9b0]/48">Workspace</p><h1 className="text-[15px] font-semibold tracking-[-0.01em] text-white">{activeNav}</h1></div>
-            <button onClick={() => setActiveNav("Plan adventure")} className="ml-auto hidden h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/68 px-4 text-xs font-semibold text-[#d0d6d6]/64 transition hover:text-white sm:flex"><Plus className="size-4 text-[#86b9b0]" /> New route</button>
+            <button onClick={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} className="ml-auto hidden h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/68 px-4 text-xs font-semibold text-[#d0d6d6]/64 transition hover:text-white sm:flex"><Plus className="size-4 text-[#86b9b0]" /> New route</button>
             <button className="relative grid size-10 place-items-center rounded-xl border border-white/[0.07] bg-[#042630]/68 text-[#d0d6d6]/58" aria-label="Notifications"><Bell className="size-[18px]" /></button>
           </header>
           {activeNav === "Plan adventure"
-            ? <AdventureCreator onCancel={() => setActiveNav("Dashboard")} onSave={storeAdventure} />
-            : <RouteLibrary adventures={adventures} onOpen={openAdventure} onCreate={() => setActiveNav("Plan adventure")} onDelete={removeAdventure} />}
+            ? <AdventureCreator initialAdventure={editingAdventure} onCancel={() => { setEditingAdventure(null); setActiveNav("Dashboard"); }} onSave={storeAdventure} />
+            : <RouteLibrary adventures={adventures} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} />}
         </main>
       </div>
     );
@@ -612,7 +645,7 @@ export default function ExpeditionDashboard() {
   return (
     <div className="min-h-screen bg-[#041421] text-[#d0d6d6] lg:flex">
       {sidebarOpen && <button className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close navigation overlay" />}
-      <Sidebar active={activeNav} onChange={setActiveNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar active={activeNav} onChange={navigate} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <main className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 flex h-[76px] items-center gap-3 border-b border-white/[0.06] bg-[#041421]/88 px-4 backdrop-blur-xl sm:px-6 xl:px-8">
@@ -657,6 +690,9 @@ export default function ExpeditionDashboard() {
               <p className="mt-2 text-sm text-[#d0d6d6]/45">A live workspace for elevation, mapped services, route intelligence and itinerary planning.</p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button onClick={editCurrentRoute} className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/72 px-4 text-xs font-semibold text-[#d0d6d6]/72 transition hover:border-[#86b9b0]/24 hover:text-white">
+                <PencilLine className="size-4 text-[#86b9b0]" /> Edit route
+              </button>
               <button className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/72 px-4 text-xs font-semibold text-[#d0d6d6]/72 transition hover:border-[#86b9b0]/24 hover:text-white">
                 <CalendarDays className="size-4 text-[#86b9b0]" />
                 Set trip date
@@ -764,6 +800,7 @@ export default function ExpeditionDashboard() {
                         <p className="truncate text-sm font-semibold text-white">{selectedPoi.name}</p>
                         <p className="mt-1 text-[10px] text-[#86b9b0]">{poiLabels[selectedPoi.category]} · {selectedPoi.distanceIntoRouteKm.toFixed(1)} km into route</p>
                         <p className="mt-2 text-[10px] leading-4 text-[#d0d6d6]/48">{selectedPoi.distanceFromRouteKm.toFixed(1)} km from the track{selectedPoi.openingHours ? ` · Hours: ${selectedPoi.openingHours}` : " · Opening hours not listed"}</p>
+                        <GooglePlaceDetailsCard place={selectedPoi} />
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                           <button onClick={() => togglePlannedPoi(selectedPoi)} className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition ${plannedPoiIds.includes(selectedPoi.id) ? "bg-white/[0.08] text-white" : "bg-[#86b9b0] text-[#041421] hover:bg-[#9ac9c0]"}`}>
                             {plannedPoiIds.includes(selectedPoi.id) ? <Trash2 className="size-3" /> : <Plus className="size-3" />}
@@ -889,7 +926,7 @@ export default function ExpeditionDashboard() {
                         </button>
                       ))}
                     </div>
-                    <p className="mt-3 text-[9px] leading-4 text-[#d0d6d6]/28">Within {poiDataset?.corridorKm ?? 1.5} km of the route · OSM {poiDataset?.osmTimestamp ? `updated ${new Date(poiDataset.osmTimestamp).toLocaleDateString()}` : "live data"} · Google Places {poiDataset?.providers.google === "configured" ? "ready" : "pending a separate key"}</p>
+                    <p className="mt-3 text-[9px] leading-4 text-[#d0d6d6]/28">Within {poiDataset?.corridorKm ?? 1.5} km of the route · OSM {poiDataset?.osmTimestamp ? `updated ${new Date(poiDataset.osmTimestamp).toLocaleDateString()}` : "live data"} · Google Places {poiDataset?.providers.google === "configured" ? "details load when a place is selected" : "pending a separate key"}</p>
                   </>
                 )}
               </article>

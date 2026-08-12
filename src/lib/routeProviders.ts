@@ -1,6 +1,6 @@
 import "server-only";
 import { createRouteDataset, decodePolyline6 } from "@/lib/routeBuilder";
-import type { GeocodeResult, RouteAnchor } from "@/types/adventure";
+import type { GeocodeResult, RouteAnchor, RoutePreferences } from "@/types/adventure";
 import type { RouteDataset } from "@/types/route";
 
 const NOMINATIM_URL = process.env.NOMINATIM_URL ?? "https://nominatim.openstreetmap.org";
@@ -120,9 +120,15 @@ export async function buildBicycleRoute(
   anchors: RouteAnchor[],
   name: string,
   source: string,
+  preferences: RoutePreferences = { bicycleType: "Hybrid", hillPreference: "balanced", roadPreference: "balanced" },
 ): Promise<RouteDataset> {
   if (anchors.length < 2) throw new Error("Add at least a start and finish before building the route.");
   if (anchors.length > 12) throw new Error("This planner supports up to 12 route anchors at a time.");
+  const safePreferences: RoutePreferences = {
+    bicycleType: (["Road", "Hybrid", "Mountain"] as const).includes(preferences.bicycleType) ? preferences.bicycleType : "Hybrid",
+    hillPreference: (["balanced", "avoid", "embrace"] as const).includes(preferences.hillPreference) ? preferences.hillPreference : "balanced",
+    roadPreference: (["balanced", "avoid_major", "prefer_roads"] as const).includes(preferences.roadPreference) ? preferences.roadPreference : "balanced",
+  };
 
   const decoded: Array<{ lat: number; lon: number }> = [];
   let totalTimeSeconds = 0;
@@ -138,7 +144,14 @@ export async function buildBicycleRoute(
       body: JSON.stringify({
         locations: legAnchors.map((anchor) => ({ lat: anchor.lat, lon: anchor.lon, type: "break" })),
         costing: "bicycle",
-        costing_options: { bicycle: { bicycle_type: "Hybrid", use_hills: 0.35, use_roads: 0.55 } },
+        costing_options: {
+          bicycle: {
+            bicycle_type: safePreferences.bicycleType,
+            use_hills: safePreferences.hillPreference === "avoid" ? 0.12 : safePreferences.hillPreference === "embrace" ? 0.78 : 0.35,
+            use_roads: safePreferences.roadPreference === "avoid_major" ? 0.18 : safePreferences.roadPreference === "prefer_roads" ? 0.82 : 0.5,
+            use_living_streets: safePreferences.roadPreference === "avoid_major" ? 0.75 : 0.5,
+          },
+        },
         directions_options: { units: "kilometers", language: "en-US" },
       }),
       signal: AbortSignal.timeout(50_000),

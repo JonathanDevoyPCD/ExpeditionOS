@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { NextResponse, type NextRequest } from "next/server";
 import { buildBicycleRoute, geocodeLocation } from "@/lib/routeProviders";
-import type { CopilotBlueprint, RouteAnchor } from "@/types/adventure";
+import type { CopilotBlueprint, RouteAnchor, RoutePreferences } from "@/types/adventure";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as { prompt?: string; startLocation?: string; days?: number };
+    const body = (await request.json()) as { prompt?: string; startLocation?: string; days?: number; preferences?: RoutePreferences };
     const prompt = body.prompt?.trim().slice(0, 1400) ?? "";
     const startLocation = body.startLocation?.trim().slice(0, 180) ?? "";
     if (!prompt) return NextResponse.json({ error: "Describe the adventure you want to create." }, { status: 400 });
@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
       anchors,
       blueprint.name,
       "Copilot plan · OpenStreetMap routing via Valhalla · elevation via Open-Meteo",
+      body.preferences,
     );
     return NextResponse.json({ blueprint, route, anchors, model: "gpt-5.6-luna" });
   } catch (error) {
