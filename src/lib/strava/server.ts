@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptStravaSecret, encryptStravaSecret } from "@/lib/strava/crypto";
 import { buildRouteReadinessReport, buildStravaReadinessSummary } from "@/lib/strava/metrics";
+import type { StravaWebhookEvent } from "@/lib/strava/webhook";
 import { getSiteUrl } from "@/lib/siteUrl";
 import type { Database } from "@/types/database";
 import type { RouteReadinessTarget, StravaConnectionStatus } from "@/types/strava";
@@ -346,6 +347,88 @@ export async function disconnectStrava(admin: AdminClient, userId: string) {
   });
   if (!response.ok) throw new Error("Strava access could not be revoked. Nothing was removed locally.");
 
+  await removeStravaConnectionData(admin, userId);
+}
+
+export async function processStravaWebhookEvent(admin: AdminClient, event: StravaWebhookEvent) {
+  const { data: connection, error: connectionError } = await admin
+    .from("strava_connections")
+    .select("*")
+    .eq("athlete_id", event.ownerId)
+    .maybeSingle();
+  if (connectionError) throw new Error(connectionError.message);
+  if (!connection) return { status: "ignored" as const, reason: "athlete_not_connected" as const };
+
+  if (event.objectType === "athlete") {
+    if (event.aspectType === "update" && event.updates.authorized === "false") {
+      await removeStravaConnectionData(admin, connection.user_id);
+      return { status: "deauthorized" as const };
+    }
+    return { status: "ignored" as const, reason: "unsupported_athlete_event" as const };
+  }
+
+  if (event.aspectType === "delete") {
+    const { error } = await admin.from("strava_activities").delete()
+      .eq("user_id", connection.user_id)
+      .eq("activity_id", event.objectId);
+    if (error) throw new Error(error.message);
+    return { status: "deleted" as const };
+  }
+
+  try {
+    const accessToken = await getValidAccessToken(admin, connection);
+    const response = await fetch(`${STRAVA_API_URL}/activities/${event.objectId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    if (response.status === 403 || response.status === 404) {
+      const { error } = await admin.from("strava_activities").delete()
+        .eq("user_id", connection.user_id)
+        .eq("activity_id", event.objectId);
+      if (error) throw new Error(error.message);
+      return { status: "removed" as const };
+    }
+    const activity = await response.json().catch(() => null) as StravaSummaryActivity | { message?: string } | null;
+    if (!response.ok || !activity || !("id" in activity)) {
+      throw new Error(activity && "message" in activity && activity.message ? activity.message : "Strava activity could not be refreshed.");
+    }
+    if (activity.id !== event.objectId || (activity.athlete?.id && activity.athlete.id !== connection.athlete_id)) {
+      throw new Error("Strava returned activity data for an unexpected owner or identifier.");
+    }
+
+    if (!CYCLING_SPORT_TYPES.has(activity.sport_type ?? activity.type ?? "")) {
+      const { error } = await admin.from("strava_activities").delete()
+        .eq("user_id", connection.user_id)
+        .eq("activity_id", event.objectId);
+      if (error) throw new Error(error.message);
+      return { status: "ignored" as const, reason: "not_cycling" as const };
+    }
+
+    const { error: upsertError } = await admin.from("strava_activities").upsert(
+      normalizeActivity(connection.user_id, connection.athlete_id, activity),
+      { onConflict: "user_id,activity_id" },
+    );
+    if (upsertError) throw new Error(upsertError.message);
+    const rateLimit = readRateLimit(response.headers);
+    const { error: statusError } = await admin.from("strava_connections").update({
+      last_synced_at: new Date().toISOString(),
+      last_sync_status: "success",
+      last_sync_error: null,
+      rate_limit_15m_used: rateLimit.used15Minutes,
+      rate_limit_15m_limit: rateLimit.limit15Minutes,
+      rate_limit_daily_used: rateLimit.usedDaily,
+      rate_limit_daily_limit: rateLimit.limitDaily,
+    }).eq("user_id", connection.user_id);
+    if (statusError) throw new Error(statusError.message);
+    return { status: "upserted" as const };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Strava webhook processing failed.";
+    await admin.from("strava_connections").update({ last_sync_status: "error", last_sync_error: message }).eq("user_id", connection.user_id);
+    throw error;
+  }
+}
+
+async function removeStravaConnectionData(admin: AdminClient, userId: string) {
   const { error: activityError } = await admin.from("strava_activities").delete().eq("user_id", userId);
   if (activityError) throw new Error(activityError.message);
   const { error: connectionDeleteError } = await admin.from("strava_connections").delete().eq("user_id", userId);

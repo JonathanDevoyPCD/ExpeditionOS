@@ -53,10 +53,15 @@ The product is not a generic hotel browser. Route boundaries, rider capability a
 
 ### Next Phase A increments
 
-- Strava webhook handling for activity create, update, delete and deauthorization.
 - Terrain and bicycle-type relevance.
 - Optional heart-rate and power drift after activity streams are imported.
 - A deterministic evidence packet for the Expedition Copilot.
+
+### Completed Phase A reliability
+
+- Strava webhook verification and subscription tooling.
+- Immediate acknowledgement with post-response processing for activity create, update and delete events.
+- Automatic removal of encrypted connection data and imported history after Strava deauthorization.
 
 ## Phase B: trip logistics and gear
 
