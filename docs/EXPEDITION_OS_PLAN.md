@@ -31,6 +31,7 @@ Implemented locally:
 - owner, editor and viewer trip membership with email-address invitations;
 - owner-only contact and travel-document records, plus per-trip opt-in emergency sharing;
 - RLS-protected persistence verified with two-user isolation assertions;
+- server-side Strava OAuth, encrypted rotating tokens, private activity-summary storage and a readiness baseline workspace awaiting provider credentials;
 - shared route analysis and GPX export for uploaded, manual and Copilot routes.
 
 ## 1. Executive decision

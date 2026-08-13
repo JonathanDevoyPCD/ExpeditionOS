@@ -41,6 +41,7 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import ElevationProfile from "@/components/dashboard/ElevationProfile";
 import AdventureCreator from "@/components/planner/AdventureCreator";
 import GooglePlaceDetailsCard from "@/components/places/GooglePlaceDetailsCard";
+import ReadinessWorkspace from "@/components/readiness/ReadinessWorkspace";
 import RouteLibrary from "@/components/routes/RouteLibrary";
 import { deleteAdventure, loadAdventures, replaceLocalAdventures, saveAdventure } from "@/lib/adventures";
 import { cloudAdventureId, deleteCloudAdventure, loadCloudAdventures, saveCloudAdventure } from "@/lib/cloudAdventures";
@@ -211,7 +212,7 @@ function Sidebar({
             Readiness baseline
           </div>
           <p className="mt-2 text-xs leading-5 text-[#d0d6d6]/48">Connect Strava to compare this route with your recent training.</p>
-          <button className="mt-3 text-[11px] font-semibold text-[#d0d6d6] transition hover:text-white">Connect account →</button>
+          <button onClick={() => { onChange("Readiness"); onClose(); }} className="mt-3 text-[11px] font-semibold text-[#d0d6d6] transition hover:text-white">Connect account →</button>
         </div>
         <button onClick={onOpenProfile} className="mb-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-white/[0.045]">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#86b9b0]/12 text-xs font-bold text-[#86b9b0]">{profile.firstName.slice(0, 1)}{profile.lastName.slice(0, 1)}</span>
@@ -421,6 +422,11 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   const [adventures, setAdventures] = useState<AdventurePlan[]>([]);
   const [editingAdventure, setEditingAdventure] = useState<AdventurePlan | null>(null);
   const [cloudStatus, setCloudStatus] = useState("Syncing routes…");
+
+  useEffect(() => {
+    const view = new URLSearchParams(window.location.search).get("view");
+    if (view === "readiness") queueMicrotask(() => setActiveNav("Readiness"));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -689,7 +695,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   const activeAdventure = adventures.find((adventure) => adventure.route.id === route.id);
   const canEditActiveRoute = activeAdventure?.access?.role !== "viewer";
 
-  if (activeNav === "Plan adventure" || activeNav === "My routes") {
+  if (activeNav === "Plan adventure" || activeNav === "My routes" || activeNav === "Readiness") {
     return (
       <div className="min-h-screen bg-[#041421] text-[#d0d6d6] lg:flex">
         {sidebarOpen && <button className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close navigation overlay" />}
@@ -698,12 +704,17 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
           <header className="sticky top-0 z-30 flex h-[76px] items-center gap-3 border-b border-white/[0.06] bg-[#041421]/88 px-4 backdrop-blur-xl sm:px-6 xl:px-8">
             <button onClick={() => setSidebarOpen(true)} className="grid size-10 place-items-center rounded-xl border border-white/[0.07] bg-[#042630] text-[#d0d6d6]/70 lg:hidden" aria-label="Open navigation"><Menu className="size-5" /></button>
             <div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#86b9b0]/48">Workspace</p><h1 className="text-[15px] font-semibold tracking-[-0.01em] text-white">{activeNav}</h1></div>
-            <button onClick={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} className="ml-auto hidden h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/68 px-4 text-xs font-semibold text-[#d0d6d6]/64 transition hover:text-white sm:flex"><Plus className="size-4 text-[#86b9b0]" /> New route</button>
+            {activeNav !== "Readiness" && <button onClick={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} className="ml-auto hidden h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/68 px-4 text-xs font-semibold text-[#d0d6d6]/64 transition hover:text-white sm:flex"><Plus className="size-4 text-[#86b9b0]" /> New route</button>}
+            {activeNav === "Readiness" && <span className="ml-auto" />}
             <button className="relative grid size-10 place-items-center rounded-xl border border-white/[0.07] bg-[#042630]/68 text-[#d0d6d6]/58" aria-label="Notifications"><Bell className="size-[18px]" /></button>
           </header>
-          {activeNav === "Plan adventure"
-            ? <AdventureCreator initialAdventure={editingAdventure} onCancel={() => { setEditingAdventure(null); setActiveNav("Dashboard"); }} onSave={storeAdventure} />
-            : <RouteLibrary adventures={adventures} syncStatus={cloudStatus} currentUserId={userId} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} onRefresh={refreshCloudRoutes} />}
+          {activeNav === "Plan adventure" ? (
+            <AdventureCreator initialAdventure={editingAdventure} onCancel={() => { setEditingAdventure(null); setActiveNav("Dashboard"); }} onSave={storeAdventure} />
+          ) : activeNav === "Readiness" ? (
+            <ReadinessWorkspace profile={profile} />
+          ) : (
+            <RouteLibrary adventures={adventures} syncStatus={cloudStatus} currentUserId={userId} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} onRefresh={refreshCloudRoutes} />
+          )}
         </main>
       </div>
     );

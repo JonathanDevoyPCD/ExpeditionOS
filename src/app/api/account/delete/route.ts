@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { disconnectStrava } from "@/lib/strava/server";
 import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,12 @@ export async function DELETE(request: Request) {
   const admin = createClient<Database>(url, secretKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
+  try {
+    await disconnectStrava(admin, verified.user.id);
+  } catch (stravaError) {
+    console.error("Strava revocation before account deletion failed", { userId: verified.user.id, message: stravaError instanceof Error ? stravaError.message : "Unknown error" });
+    return NextResponse.json({ error: "Your Strava access could not be revoked. Disconnect Strava, then try deleting your account again." }, { status: 502 });
+  }
   const { error } = await admin.auth.admin.deleteUser(verified.user.id);
   if (error) {
     console.error("Account deletion failed", { userId: verified.user.id, code: error.code });

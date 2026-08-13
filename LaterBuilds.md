@@ -64,9 +64,11 @@ Booking.com Demand API access requires affiliate approval and credentials. Until
 
 ## Strava account synchronization
 
-**Blocked by:** A registered Strava application, OAuth client credentials, redirect configuration, and user authorization.
+**Foundation implemented:** ExpeditionOS now has server-side OAuth initiation and callback routes, encrypted token storage, automatic short-lived token refresh, one-year cycling-summary backfill, manual synchronization, rate-limit tracking, safe revocation, owner-only activity access and a Readiness workspace.
 
-Once configured, ExpeditionOS can compare planned routes with recent training load and personalize feasibility advice. The application must store tokens privately and respect Strava API limits and display requirements.
+**Activation still requires:** A registered Strava application plus `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` and `STRAVA_TOKEN_ENCRYPTION_KEY` in local and Vercel environments. The production authorization callback domain must be `expedition-os-mocha.vercel.app`.
+
+The next Strava increment is webhook-driven create, update, delete and deauthorization handling, followed by deterministic route-versus-history readiness scoring. New applications begin in single-player mode; expanded athlete capacity requires configuration or review through Strava.
 
 ## Account services still to add
 
