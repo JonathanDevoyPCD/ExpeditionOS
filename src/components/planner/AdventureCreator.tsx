@@ -11,6 +11,7 @@ import {
   Clock3,
   ExternalLink,
   Globe2,
+  Lock,
   Layers3,
   LocateFixed,
   LoaderCircle,
@@ -30,7 +31,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createAdventureId } from "@/lib/adventures";
 import { DAY_COLORS, type DayRange } from "@/components/planner/RouteBuilderMap";
 import GooglePlaceDetailsCard from "@/components/places/GooglePlaceDetailsCard";
-import type { AdventurePlan, CopilotBlueprint, GeocodeResult, RouteAnchor, RoutePreferences } from "@/types/adventure";
+import type { AdventurePlan, AdventureVisibility, CopilotBlueprint, GeocodeResult, RouteAnchor, RoutePreferences } from "@/types/adventure";
 import type { MapPlace, MapPlaceDataset, MapViewport } from "@/types/mapPlace";
 import { POI_CATEGORIES, type PoiCategory, type PoiDataset, type RoutePoi } from "@/types/poi";
 import type { RouteDataset } from "@/types/route";
@@ -123,6 +124,7 @@ export default function AdventureCreator({
   const [blueprint, setBlueprint] = useState<CopilotBlueprint | null>(initialAdventure?.blueprint ?? null);
   const [preferences, setPreferences] = useState<RoutePreferences>(initialAdventure?.preferences ?? DEFAULT_PREFERENCES);
   const [days, setDays] = useState(initialAdventure?.days ?? initialAdventure?.blueprint?.days ?? 1);
+  const [visibility, setVisibility] = useState<AdventureVisibility>(initialAdventure?.visibility ?? "private");
   const [routeNeedsRebuild, setRouteNeedsRebuild] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
@@ -347,6 +349,7 @@ export default function AdventureCreator({
       anchors,
       blueprint: blueprint ?? undefined,
       preferences,
+      visibility,
       access: initialAdventure?.access,
     }, poiDataset);
   }
@@ -382,6 +385,12 @@ export default function AdventureCreator({
               <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} className="mt-2 h-32 w-full resize-none rounded-xl border border-white/[0.08] bg-[#041421]/55 p-3 text-xs leading-6 text-white outline-none focus:border-[#86b9b0]/35" />
               <button onClick={buildCopilotRoute} disabled={loading || !prompt.trim() || !startLocation.trim()} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#86b9b0] text-xs font-bold text-[#041421] disabled:opacity-35">{loading ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{loading ? "Planning and routing…" : "Create route with Copilot"}</button>
             </>}
+          </article>
+
+          <article className="glass-panel rounded-[24px] p-5">
+            <div className="flex items-center gap-2"><Lock className="size-4 text-[#86b9b0]" /><h3 className="text-sm font-semibold text-white">Route visibility</h3></div>
+            <p className="mt-2 text-[10px] leading-5 text-[#d0d6d6]/38">Private routes are invite-only. Public routes can be viewed by everyone, but only contributors can edit.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">{(["private", "public"] as const).map((value) => <button key={value} onClick={() => setVisibility(value)} disabled={Boolean(initialAdventure && initialAdventure.access?.role !== "owner")} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-[10px] font-semibold capitalize transition disabled:cursor-not-allowed ${visibility === value ? "border-[#86b9b0]/45 bg-[#86b9b0]/12 text-white" : "border-white/[0.07] text-[#d0d6d6]/40"}`}>{value === "private" ? <Lock className="size-3.5" /> : <Globe2 className="size-3.5" />}{value}</button>)}</div>
           </article>
 
           <article className="glass-panel rounded-[24px] p-5">

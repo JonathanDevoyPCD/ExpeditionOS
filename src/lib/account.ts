@@ -1,6 +1,5 @@
+import { clearAdventureCache } from "@/lib/adventures";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-
-const ACCOUNT_STORAGE_KEY = "expeditionos.adventures.v1";
 
 export async function exportAccountData(userId: string) {
   const supabase = getSupabaseBrowserClient();
@@ -15,6 +14,11 @@ export async function exportAccountData(userId: string) {
   ]);
   const error = results.find((result) => result.error)?.error;
   if (error) throw error;
+  const membershipRouteIds = new Set(
+    (results[5].data ?? [])
+      .filter((membership) => membership.user_id === userId && membership.status === "accepted")
+      .map((membership) => membership.adventure_id),
+  );
 
   return {
     exportedAt: new Date().toISOString(),
@@ -25,9 +29,9 @@ export async function exportAccountData(userId: string) {
       travelDocuments: results[2].data,
       emergencyDetails: results[3].data,
     },
-    routes: results[4].data,
-    tripMemberships: results[5].data,
-    tripInvitations: results[6].data,
+    routes: (results[4].data ?? []).filter((route) => route.owner_id === userId || membershipRouteIds.has(route.id)),
+    tripMemberships: results[5].data ?? [],
+    tripInvitations: results[6].data ?? [],
   };
 }
 
@@ -47,6 +51,7 @@ export async function deleteAccount() {
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) throw error ?? new Error("Your session has expired. Please sign in again.");
+  const userId = data.session.user.id;
 
   const response = await fetch("/api/account/delete", {
     method: "DELETE",
@@ -59,6 +64,6 @@ export async function deleteAccount() {
   const result = await response.json() as { error?: string };
   if (!response.ok) throw new Error(result.error ?? "Your account could not be deleted.");
 
-  window.localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+  clearAdventureCache(userId);
   await supabase.auth.signOut({ scope: "local" });
 }

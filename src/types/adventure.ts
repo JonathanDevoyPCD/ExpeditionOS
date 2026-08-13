@@ -1,5 +1,12 @@
 import type { RouteDataset } from "@/types/route";
 
+export type AdventureVisibility = "private" | "public";
+export type AdventureAccessRole = "owner" | "editor" | "viewer";
+
+export function adventureRoleLabel(role: AdventureAccessRole) {
+  return role === "owner" ? "Creator" : role === "editor" ? "Contributor" : "Viewer";
+}
+
 export type RouteAnchorKind = "start" | "via" | "overnight" | "finish";
 
 export type RoutePreferences = {
@@ -60,8 +67,10 @@ export type AdventurePlan = {
   anchors: RouteAnchor[];
   blueprint?: CopilotBlueprint;
   preferences?: RoutePreferences;
+  visibility: AdventureVisibility;
   access?: {
     ownerId: string;
-    role: "owner" | "editor" | "viewer";
+    role: AdventureAccessRole;
+    isMember: boolean;
   };
 };

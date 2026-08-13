@@ -131,6 +131,7 @@ export type Database = {
           route: Json
           source: string
           updated_at: string
+          visibility: string
         }
         Insert: {
           anchors?: Json
@@ -145,6 +146,7 @@ export type Database = {
           route: Json
           source: string
           updated_at?: string
+          visibility?: string
         }
         Update: {
           anchors?: Json
@@ -159,6 +161,7 @@ export type Database = {
           route?: Json
           source?: string
           updated_at?: string
+          visibility?: string
         }
         Relationships: [
           {
@@ -356,6 +359,18 @@ export type Database = {
           target_role?: string
         }
         Returns: string
+      }
+      set_adventure_member_role: {
+        Args: {
+          target_adventure_id: string
+          target_role: string
+          target_user_id: string
+        }
+        Returns: undefined
+      }
+      set_adventure_visibility: {
+        Args: { target_adventure_id: string; target_visibility: string }
+        Returns: undefined
       }
       remove_adventure_member: {
         Args: { target_adventure_id: string; target_user_id: string }

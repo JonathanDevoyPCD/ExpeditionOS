@@ -418,7 +418,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   const [analysisPlaces, setAnalysisPlaces] = useState<RoutePoi[]>([]);
   const [analysisModel, setAnalysisModel] = useState<string | null>(null);
   const [copilotQuestion, setCopilotQuestion] = useState("");
-  const [adventures, setAdventures] = useState<AdventurePlan[]>(loadAdventures);
+  const [adventures, setAdventures] = useState<AdventurePlan[]>([]);
   const [editingAdventure, setEditingAdventure] = useState<AdventurePlan | null>(null);
   const [cloudStatus, setCloudStatus] = useState("Syncing routes…");
 
@@ -426,20 +426,23 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
     let active = true;
     async function syncRoutes() {
       try {
-        const local = loadAdventures();
+        const local = loadAdventures(userId);
         let cloud = await loadCloudAdventures(userId);
         const cloudIds = new Set(cloud.map((adventure) => adventure.id));
-        const pendingImports = local.filter((adventure) => !cloudIds.has(adventure.access ? adventure.id : cloudAdventureId(adventure.id, userId)));
+        const pendingImports = local.filter((adventure) => !adventure.access && !cloudIds.has(cloudAdventureId(adventure.id, userId)));
         if (pendingImports.length) {
           await Promise.all(pendingImports.map((adventure) => saveCloudAdventure(adventure, userId)));
           cloud = await loadCloudAdventures(userId);
         }
         if (active) {
-          setAdventures(replaceLocalAdventures(cloud));
+          setAdventures(replaceLocalAdventures(cloud, userId));
           setCloudStatus(pendingImports.length ? `${pendingImports.length} browser route${pendingImports.length === 1 ? "" : "s"} moved to your account` : "Routes synced securely");
         }
       } catch {
-        if (active) setCloudStatus("Offline — browser copy in use");
+        if (active) {
+          setAdventures(loadAdventures(userId));
+          setCloudStatus("Offline — your private browser copy is in use");
+        }
       }
     }
     syncRoutes();
@@ -592,7 +595,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   }
 
   async function storeAdventure(adventure: AdventurePlan, initialPois: PoiDataset | null) {
-    setAdventures(saveAdventure(adventure));
+    setAdventures(saveAdventure(adventure, userId));
     setRoute(adventure.route);
     setPoiDataset(initialPois);
     setAnalysis(null);
@@ -603,7 +606,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
     setCloudStatus("Saving route…");
     try {
       await saveCloudAdventure(adventure, userId);
-      setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId)));
+      setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId), userId));
       setCloudStatus("Route saved to your account");
     } catch {
       setCloudStatus("Cloud save failed — browser copy retained");
@@ -622,6 +625,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
       createdAt: now,
       updatedAt: now,
       days: 1,
+      visibility: "private",
       route,
       anchors: [
         { id: `anchor-${route.id}-start`, name: "Route start", lat: route.start.lat, lon: route.start.lon, kind: "start" },
@@ -637,10 +641,10 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   }
 
   async function removeAdventure(id: string) {
-    setAdventures(deleteAdventure(id));
+    setAdventures(deleteAdventure(id, userId));
     try {
       await deleteCloudAdventure(id);
-      setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId)));
+      setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId), userId));
       setCloudStatus("Route removed");
     } catch {
       setCloudStatus("Only trip owners can remove shared routes");
@@ -648,7 +652,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   }
 
   async function refreshCloudRoutes() {
-    setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId)));
+    setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId), userId));
     setCloudStatus("Routes synced securely");
   }
 

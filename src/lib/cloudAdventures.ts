@@ -1,11 +1,11 @@
 import type { Json } from "@/types/database";
-import type { AdventurePlan } from "@/types/adventure";
+import type { AdventureAccessRole, AdventurePlan, AdventureVisibility } from "@/types/adventure";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type TripMember = {
   userId: string;
   name: string;
-  role: "owner" | "editor" | "viewer";
+  role: AdventureAccessRole;
   shareEmergencyProfile: boolean;
 };
 
@@ -44,9 +44,11 @@ export async function loadCloudAdventures(userId: string): Promise<AdventurePlan
     anchors: row.anchors as unknown as AdventurePlan["anchors"],
     blueprint: (row.blueprint ?? undefined) as unknown as AdventurePlan["blueprint"],
     preferences: (row.preferences ?? undefined) as unknown as AdventurePlan["preferences"],
+    visibility: row.visibility as AdventureVisibility,
     access: {
       ownerId: row.owner_id,
-      role: (roles.get(row.id) ?? (row.owner_id === userId ? "owner" : "viewer")) as "owner" | "editor" | "viewer",
+      role: (roles.get(row.id) ?? (row.owner_id === userId ? "owner" : "viewer")) as AdventureAccessRole,
+      isMember: roles.has(row.id) || row.owner_id === userId,
     },
   }));
 }
@@ -68,8 +70,9 @@ export async function saveCloudAdventure(adventure: AdventurePlan, userId: strin
   if (lookupError) throw lookupError;
   const result = existing
     ? await supabase.from("adventures").update(values).eq("id", id)
-    : await supabase.from("adventures").insert({ id, owner_id: userId, ...values });
+    : await supabase.from("adventures").insert({ id, owner_id: userId, visibility: adventure.visibility, ...values });
   if (result.error) throw result.error;
+  if (existing && adventure.access?.role === "owner") await setAdventureVisibility(id, adventure.visibility);
 }
 
 export async function deleteCloudAdventure(id: string) {
@@ -117,6 +120,23 @@ export async function removeTripMember(adventureId: string, userId: string) {
   const { error } = await getSupabaseBrowserClient().rpc("remove_adventure_member", {
     target_adventure_id: adventureId,
     target_user_id: userId,
+  });
+  if (error) throw error;
+}
+
+export async function setAdventureVisibility(adventureId: string, visibility: AdventureVisibility) {
+  const { error } = await getSupabaseBrowserClient().rpc("set_adventure_visibility", {
+    target_adventure_id: adventureId,
+    target_visibility: visibility,
+  });
+  if (error) throw error;
+}
+
+export async function setTripMemberRole(adventureId: string, userId: string, role: "editor" | "viewer") {
+  const { error } = await getSupabaseBrowserClient().rpc("set_adventure_member_role", {
+    target_adventure_id: adventureId,
+    target_user_id: userId,
+    target_role: role,
   });
   if (error) throw error;
 }
