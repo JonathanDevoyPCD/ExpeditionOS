@@ -481,3 +481,7 @@ These do not block the first technical spike, but they should be decided before 
 ## 15. Recommended immediate next step
 
 Before building the polished UI, run a thin technical spike with one known GPX file and a small export of representative Strava activities. The spike should produce a plain JSON readiness result with no AI-generated prose. Once the calculations are believable, add the OpenAI report layer and then design the full Tailwind experience around the trusted result.
+
+## 16. Approved next sequence
+
+The product decision on 13 August 2026 is to complete route-specific readiness first, then build integrated trip logistics and collaborative gear. Booking.com Demand API and expanded Google review content are deferred until the core route, rider and logistics workflow is proven. See `docs/READINESS_LOGISTICS_ROADMAP.md` for the approved scope and interface direction.

@@ -1,5 +1,5 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { StravaConnectionStatus } from "@/types/strava";
+import type { RouteReadinessReport, RouteReadinessTarget, StravaConnectionStatus } from "@/types/strava";
 
 async function stravaRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const { data, error } = await getSupabaseBrowserClient().auth.getSession();
@@ -31,4 +31,12 @@ export function syncStravaNow() {
 
 export function disconnectStravaAccount() {
   return stravaRequest<{ disconnected: true }>("/api/strava/disconnect", { method: "DELETE" });
+}
+
+export function loadRouteReadiness(target: RouteReadinessTarget) {
+  return stravaRequest<RouteReadinessReport>("/api/strava/readiness", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(target),
+  });
 }
