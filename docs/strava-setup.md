@@ -22,6 +22,8 @@ Add these values to `.env.local` and to the Vercel Production, Preview and Devel
 STRAVA_CLIENT_ID=
 STRAVA_CLIENT_SECRET=
 STRAVA_TOKEN_ENCRYPTION_KEY=
+STRAVA_WEBHOOK_VERIFY_TOKEN=
+STRAVA_WEBHOOK_SUBSCRIPTION_ID=
 ```
 
 Generate the encryption key once:
@@ -31,6 +33,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Keep the encryption key stable and backed up with the deployment secrets. Replacing it without first re-encrypting stored tokens will make existing Strava connections unreadable.
+
+Generate a separate webhook verification token and keep it server-only:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
 Redeploy Vercel after adding or changing environment variables.
 
@@ -44,7 +52,19 @@ The initial sync reads up to the latest year of activities in at most five 200-i
 
 New Strava applications begin in single-player mode. This supports the primary rider; additional riders require increased athlete capacity through Strava's API settings and, at larger scale, Strava review.
 
-Manual sync is implemented first to keep API use predictable. The next increment should register Strava webhooks for activity create, update, delete and athlete deauthorization events so routine polling is unnecessary.
+## Register the webhook
+
+Add `STRAVA_WEBHOOK_VERIFY_TOKEN` locally and to Vercel, redeploy so the public verification endpoint is active, then run:
+
+```powershell
+npm run strava:webhook -- register
+```
+
+The command uses `SITE_URL` to register `${SITE_URL}/api/strava/webhook`. Strava allows only one subscription per application. If another callback is already registered, inspect it with `npm run strava:webhook -- list` and remove it only when you intend to replace it with `npm run strava:webhook -- delete <subscription-id>`.
+
+After registration, copy the returned value into `STRAVA_WEBHOOK_SUBSCRIPTION_ID` locally and in Vercel, then redeploy once more. ExpeditionOS rejects POST events from any other subscription ID.
+
+Activity create and update events fetch the current Strava activity and upsert only recognized cycling activity types. Delete events remove the matching private summary. Athlete deauthorization removes the connection and all imported activity summaries. Webhook work runs after the `200` acknowledgement so Strava receives its required prompt response; failures are recorded on the connection and remain recoverable through manual sync.
 
 Official references:
 
