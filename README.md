@@ -32,6 +32,7 @@ The first working slice includes:
 - Trip collaboration with owner, editor and viewer roles, in-app invitations and member removal.
 - Explicit per-trip emergency-profile sharing; contact details and travel documents remain owner-only.
 - Row-level security on every exposed table, validated with a rolled-back two-user isolation test.
+- A server-only Strava OAuth foundation with encrypted rotating tokens, owner-isolated cycling summaries, manual sync and a private readiness workspace.
 - Public Privacy and Terms pages, a JSON account export, and authenticated self-service account deletion.
 - A no-cache `/api/health` endpoint for hosted deployment checks.
 
@@ -73,3 +74,9 @@ SA ID, passport, medical and emergency fields are optional. The alpha includes p
 ## Private provider configuration
 
 Copy `.env.example` to `.env.local` and keep real credentials only in `.env.local`. `GOOGLE_API_KEY` is used exclusively by server route handlers and is never returned to the browser. Restrict the Google key to the specific server-side APIs ExpeditionOS uses and configure billing budgets and quota alerts before deployment.
+
+## Strava setup
+
+Register a Strava API application, set its authorization callback domain to `expedition-os-mocha.vercel.app`, and add the three server-only variables documented in [docs/strava-setup.md](docs/strava-setup.md). The callback URL is `https://expedition-os-mocha.vercel.app/api/strava/callback`.
+
+Until those variables are configured, the Readiness workspace safely shows a setup-required state. New Strava applications begin in single-player mode, which is enough for the primary rider but must be expanded before additional team members can connect their own Strava accounts.

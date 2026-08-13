@@ -32,7 +32,7 @@ export type Database = {
           invited_by: string
           invitee_email: string
           responded_at?: string | null
-          role: string
+          role?: string
           status?: string
         }
         Update: {
@@ -347,6 +347,159 @@ export type Database = {
         }
         Relationships: []
       }
+      strava_activities: {
+        Row: {
+          achievement_count: number
+          activity_id: number
+          athlete_id: number
+          average_heartrate: number | null
+          average_speed_mps: number | null
+          average_watts: number | null
+          commute: boolean
+          distance_m: number
+          elapsed_time_s: number
+          imported_at: string
+          kilojoules: number | null
+          kudos_count: number
+          manual: boolean
+          max_heartrate: number | null
+          max_speed_mps: number | null
+          moving_time_s: number
+          name: string
+          private: boolean
+          sport_type: string
+          start_date: string
+          start_date_local: string | null
+          suffer_score: number | null
+          timezone: string | null
+          total_elevation_gain_m: number
+          trainer: boolean
+          updated_at: string
+          user_id: string
+          weighted_average_watts: number | null
+        }
+        Insert: {
+          achievement_count?: number
+          activity_id: number
+          athlete_id: number
+          average_heartrate?: number | null
+          average_speed_mps?: number | null
+          average_watts?: number | null
+          commute?: boolean
+          distance_m?: number
+          elapsed_time_s?: number
+          imported_at?: string
+          kilojoules?: number | null
+          kudos_count?: number
+          manual?: boolean
+          max_heartrate?: number | null
+          max_speed_mps?: number | null
+          moving_time_s?: number
+          name: string
+          private?: boolean
+          sport_type: string
+          start_date: string
+          start_date_local?: string | null
+          suffer_score?: number | null
+          timezone?: string | null
+          total_elevation_gain_m?: number
+          trainer?: boolean
+          updated_at?: string
+          user_id: string
+          weighted_average_watts?: number | null
+        }
+        Update: {
+          achievement_count?: number
+          activity_id?: number
+          athlete_id?: number
+          average_heartrate?: number | null
+          average_speed_mps?: number | null
+          average_watts?: number | null
+          commute?: boolean
+          distance_m?: number
+          elapsed_time_s?: number
+          imported_at?: string
+          kilojoules?: number | null
+          kudos_count?: number
+          manual?: boolean
+          max_heartrate?: number | null
+          max_speed_mps?: number | null
+          moving_time_s?: number
+          name?: string
+          private?: boolean
+          sport_type?: string
+          start_date?: string
+          start_date_local?: string | null
+          suffer_score?: number | null
+          timezone?: string | null
+          total_elevation_gain_m?: number
+          trainer?: boolean
+          updated_at?: string
+          user_id?: string
+          weighted_average_watts?: number | null
+        }
+        Relationships: []
+      }
+      strava_connections: {
+        Row: {
+          access_token_ciphertext: string
+          access_token_expires_at: string
+          athlete_avatar_url: string | null
+          athlete_id: number
+          athlete_name: string
+          created_at: string
+          last_sync_error: string | null
+          last_sync_status: string
+          last_synced_at: string | null
+          rate_limit_15m_limit: number | null
+          rate_limit_15m_used: number | null
+          rate_limit_daily_limit: number | null
+          rate_limit_daily_used: number | null
+          refresh_token_ciphertext: string
+          scopes: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_ciphertext: string
+          access_token_expires_at: string
+          athlete_avatar_url?: string | null
+          athlete_id: number
+          athlete_name?: string
+          created_at?: string
+          last_sync_error?: string | null
+          last_sync_status?: string
+          last_synced_at?: string | null
+          rate_limit_15m_limit?: number | null
+          rate_limit_15m_used?: number | null
+          rate_limit_daily_limit?: number | null
+          rate_limit_daily_used?: number | null
+          refresh_token_ciphertext: string
+          scopes?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_ciphertext?: string
+          access_token_expires_at?: string
+          athlete_avatar_url?: string | null
+          athlete_id?: number
+          athlete_name?: string
+          created_at?: string
+          last_sync_error?: string | null
+          last_sync_status?: string
+          last_synced_at?: string | null
+          rate_limit_15m_limit?: number | null
+          rate_limit_15m_used?: number | null
+          rate_limit_daily_limit?: number | null
+          rate_limit_daily_used?: number | null
+          refresh_token_ciphertext?: string
+          scopes?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -360,6 +513,14 @@ export type Database = {
         }
         Returns: string
       }
+      remove_adventure_member: {
+        Args: { target_adventure_id: string; target_user_id: string }
+        Returns: undefined
+      }
+      respond_to_adventure_invitation: {
+        Args: { accept_invitation: boolean; target_invitation_id: string }
+        Returns: string
+      }
       set_adventure_member_role: {
         Args: {
           target_adventure_id: string
@@ -371,14 +532,6 @@ export type Database = {
       set_adventure_visibility: {
         Args: { target_adventure_id: string; target_visibility: string }
         Returns: undefined
-      }
-      remove_adventure_member: {
-        Args: { target_adventure_id: string; target_user_id: string }
-        Returns: undefined
-      }
-      respond_to_adventure_invitation: {
-        Args: { accept_invitation: boolean; target_invitation_id: string }
-        Returns: string
       }
     }
     Enums: {
