@@ -711,7 +711,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
           {activeNav === "Plan adventure" ? (
             <AdventureCreator initialAdventure={editingAdventure} onCancel={() => { setEditingAdventure(null); setActiveNav("Dashboard"); }} onSave={storeAdventure} />
           ) : activeNav === "Readiness" ? (
-            <ReadinessWorkspace profile={profile} />
+            <ReadinessWorkspace profile={profile} adventures={adventures} activeRoute={route} />
           ) : (
             <RouteLibrary adventures={adventures} syncStatus={cloudStatus} currentUserId={userId} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} onRefresh={refreshCloudRoutes} />
           )}

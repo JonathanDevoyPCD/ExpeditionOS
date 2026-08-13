@@ -1,21 +1,14 @@
-export type StravaMetricActivity = {
-  start_date: string;
-  distance_m: number;
-  moving_time_s: number;
-  total_elevation_gain_m: number;
-};
+import type { RouteReadinessReport, RouteReadinessTarget, StravaMetricActivity, StravaReadinessSummary, StravaSummaryMetricActivity } from "@/types/strava";
+
+export const READINESS_RULE_VERSION: "readiness-v1";
 
 export function buildStravaReadinessSummary(
-  activities: StravaMetricActivity[],
+  activities: StravaSummaryMetricActivity[],
   now?: Date,
-): {
-  activityCount: number;
-  lastActivityAt: string | null;
-  last30DaysDistanceKm: number;
-  last30DaysAscentM: number;
-  last90DaysDistanceKm: number;
-  last90DaysAscentM: number;
-  longestRideKm: number;
-  biggestClimbM: number;
-  longestMovingMinutes: number;
-};
+): StravaReadinessSummary;
+
+export function buildRouteReadinessReport(
+  activities: StravaMetricActivity[],
+  target: RouteReadinessTarget,
+  now?: Date,
+): RouteReadinessReport;

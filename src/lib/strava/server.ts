@@ -3,10 +3,10 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptStravaSecret, encryptStravaSecret } from "@/lib/strava/crypto";
-import { buildStravaReadinessSummary } from "@/lib/strava/metrics";
+import { buildRouteReadinessReport, buildStravaReadinessSummary } from "@/lib/strava/metrics";
 import { getSiteUrl } from "@/lib/siteUrl";
 import type { Database } from "@/types/database";
-import type { StravaConnectionStatus } from "@/types/strava";
+import type { RouteReadinessTarget, StravaConnectionStatus } from "@/types/strava";
 
 const STRAVA_AUTHORIZE_URL = "https://www.strava.com/oauth/authorize";
 const STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token";
@@ -301,6 +301,24 @@ export async function getStravaStatus(admin: AdminClient, userId: string): Promi
     },
     readiness: buildStravaReadinessSummary(activities),
   };
+}
+
+export async function getRouteReadiness(admin: AdminClient, userId: string, target: RouteReadinessTarget) {
+  const { data: connection, error: connectionError } = await admin
+    .from("strava_connections")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (connectionError) throw new Error(connectionError.message);
+  if (!connection) throw new Error("Connect Strava before comparing a route with your riding history.");
+
+  const { data: activities, error: activitiesError } = await admin
+    .from("strava_activities")
+    .select("activity_id, name, sport_type, start_date, distance_m, moving_time_s, total_elevation_gain_m")
+    .eq("user_id", userId)
+    .order("start_date", { ascending: false });
+  if (activitiesError) throw new Error(activitiesError.message);
+  return buildRouteReadinessReport(activities, target);
 }
 
 export async function disconnectStrava(admin: AdminClient, userId: string) {
