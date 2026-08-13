@@ -29,8 +29,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createAdventureId } from "@/lib/adventures";
-import { DAY_COLORS, type DayRange } from "@/components/planner/RouteBuilderMap";
+import { DAY_COLORS } from "@/components/planner/RouteBuilderMap";
 import GooglePlaceDetailsCard from "@/components/places/GooglePlaceDetailsCard";
+import { buildRouteStages } from "@/lib/routeStages";
 import type { AdventurePlan, AdventureVisibility, CopilotBlueprint, GeocodeResult, RouteAnchor, RoutePreferences } from "@/types/adventure";
 import type { MapPlace, MapPlaceDataset, MapViewport } from "@/types/mapPlace";
 import { POI_CATEGORIES, type PoiCategory, type PoiDataset, type RoutePoi } from "@/types/poi";
@@ -80,34 +81,6 @@ function suggestedPlaces(dataset: PoiDataset | null, route: RouteDataset | null)
     .slice(0, 8);
 }
 
-function buildDayRanges(route: RouteDataset | null, days: number, blueprint: CopilotBlueprint | null): DayRange[] {
-  if (!route) return [];
-  const count = Math.max(1, Math.min(7, days));
-  const targets = blueprint?.dailyPlan.length === count
-    ? blueprint.dailyPlan.map((day) => Math.max(1, day.targetDistanceKm))
-    : Array.from({ length: count }, () => 1);
-  const totalWeight = targets.reduce((sum, value) => sum + value, 0);
-  let startKm = 0;
-  return targets.map((weight, index) => {
-    const endKm = index === targets.length - 1 ? route.metrics.distanceKm : startKm + route.metrics.distanceKm * (weight / totalWeight);
-    const range = { day: index + 1, startKm, endKm };
-    startKm = endKm;
-    return range;
-  });
-}
-
-function dayStats(route: RouteDataset, range: DayRange) {
-  const points = route.elevationProfile.filter((point) => point.distanceKm >= range.startKm && point.distanceKm <= range.endKm);
-  let ascentM = 0;
-  for (let index = 1; index < points.length; index += 1) ascentM += Math.max(0, points[index].elevationM - points[index - 1].elevationM);
-  const distanceKm = range.endKm - range.startKm;
-  return {
-    distanceKm,
-    ascentM: Math.round(ascentM),
-    minutes: Math.round(route.metrics.estimatedMovingMinutes * (distanceKm / route.metrics.distanceKm)),
-  };
-}
-
 export default function AdventureCreator({
   initialAdventure,
   onCancel,
@@ -144,7 +117,8 @@ export default function AdventureCreator({
   const [mapPlacesError, setMapPlacesError] = useState<string | null>(null);
   const [visibleCategories, setVisibleCategories] = useState<PoiCategory[]>([...POI_CATEGORIES]);
   const [selectedPlace, setSelectedPlace] = useState<MapPlace | null>(null);
-  const dayRanges = useMemo(() => buildDayRanges(route, days, blueprint), [route, days, blueprint]);
+  const dayPlan = useMemo(() => buildRouteStages(route, days, anchors, blueprint), [route, days, anchors, blueprint]);
+  const dayRanges = dayPlan.stages;
   const routePlaces = useMemo(() => suggestedPlaces(poiDataset, route), [poiDataset, route]);
 
   useEffect(() => {
@@ -439,7 +413,7 @@ export default function AdventureCreator({
             {route ? <div>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center"><span className={`grid size-11 place-items-center rounded-xl ${routeNeedsRebuild ? "bg-amber-200/10 text-amber-100" : "bg-[#86b9b0]/12 text-[#86b9b0]"}`}>{routeNeedsRebuild ? <RefreshCw className="size-5" /> : <Check className="size-5" />}</span><div className="min-w-0 flex-1"><p className="truncate text-base font-semibold text-white">{route.name}</p><p className="mt-1 text-[10px] text-[#d0d6d6]/38">{route.metrics.distanceKm} km · {route.metrics.ascentM.toLocaleString()} m ascent · {Math.floor(route.metrics.estimatedMovingMinutes / 60)}h {route.metrics.estimatedMovingMinutes % 60}m routed time</p>{routeNeedsRebuild && <p className="mt-1 text-[9px] text-amber-100/55">Anchors or preferences changed. Reroute before saving.</p>}</div><label className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-[#041421]/42 px-3 py-2 text-[10px] text-[#d0d6d6]/48">Days <input type="number" min={1} max={7} value={days} onChange={(event) => setDays(Math.max(1, Math.min(7, Number(event.target.value))))} className="w-10 bg-transparent text-center font-bold text-white outline-none" /></label><button onClick={save} disabled={routeNeedsRebuild} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#86b9b0] px-5 text-xs font-bold text-[#041421] disabled:cursor-not-allowed disabled:opacity-35"><Plus className="size-4" /> {initialAdventure ? "Save revision" : "Save and open route"}</button></div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-4">{dayRanges.map((range) => { const stats = dayStats(route, range); const planned = blueprint?.dailyPlan.find((item) => item.day === range.day); return <article key={range.day} className="rounded-2xl border border-white/[0.07] bg-[#041421]/34 p-4"><div className="flex items-center justify-between"><p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: DAY_COLORS[(range.day - 1) % DAY_COLORS.length] }}>Day {range.day}</p><span className="text-[9px] text-[#d0d6d6]/32">{range.startKm.toFixed(0)}–{range.endKm.toFixed(0)} km</span></div><p className="mt-2 text-xs font-semibold text-white">{planned?.title ?? `${stats.distanceKm.toFixed(0)} km stage`}</p><p className="mt-2 text-[10px] leading-5 text-[#d0d6d6]/40">{stats.distanceKm.toFixed(1)} km · {stats.ascentM.toLocaleString()} m up · {Math.floor(stats.minutes / 60)}h {stats.minutes % 60}m</p>{planned?.summary && <p className="mt-2 line-clamp-3 text-[9px] leading-4 text-[#d0d6d6]/30">{planned.summary}</p>}</article>; })}</div>
+              <div className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-4">{dayRanges.map((stage) => { const planned = blueprint?.dailyPlan.find((item) => item.day === stage.day); return <article key={stage.day} className="rounded-2xl border border-white/[0.07] bg-[#041421]/34 p-4"><div className="flex items-center justify-between"><p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: DAY_COLORS[(stage.day - 1) % DAY_COLORS.length] }}>Day {stage.day}</p><span className="text-[9px] text-[#d0d6d6]/32">{stage.startKm.toFixed(0)}–{stage.endKm.toFixed(0)} km</span></div><p className="mt-2 text-xs font-semibold text-white">{planned?.title ?? `${stage.distanceKm.toFixed(0)} km stage`}</p><p className="mt-2 text-[10px] leading-5 text-[#d0d6d6]/40">{stage.distanceKm.toFixed(1)} km · {stage.ascentM.toLocaleString()} m up · {Math.floor(stage.estimatedMovingMinutes / 60)}h {stage.estimatedMovingMinutes % 60}m</p>{planned?.summary && <p className="mt-2 line-clamp-3 text-[9px] leading-4 text-[#d0d6d6]/30">{planned.summary}</p>}</article>; })}</div>
 
               <div className="mt-5"><div className="flex items-center gap-2"><TentTree className="size-4 text-[#86b9b0]" /><p className="text-xs font-semibold text-white">Route-specific lodging and resupply</p>{placesLoading && <LoaderCircle className="size-3.5 animate-spin text-[#86b9b0]" />}</div>{routePlaces.length > 0 ? <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">{routePlaces.map((poi) => <article key={poi.id} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-[#041421]/30 p-3"><MapPin className="size-4 shrink-0 text-[#86b9b0]" /><div className="min-w-0"><p className="truncate text-[10px] font-semibold text-white">{poi.name}</p><p className="mt-1 text-[9px] text-[#d0d6d6]/35">{poi.category} · {poi.distanceIntoRouteKm.toFixed(1)} km</p></div></article>)}</div> : !placesLoading && <p className="mt-2 text-[10px] text-[#d0d6d6]/34">Zoom and explore the map to choose places before finalising the route.</p>}</div>
             </div> : <div className="flex items-center gap-3 text-[#d0d6d6]/38"><Globe2 className="size-4" /><p className="text-xs">Explore the visible places, then add route anchors or ask Copilot for a complete plan.</p></div>}

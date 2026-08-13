@@ -25,8 +25,8 @@ The product is not a generic hotel browser. Route boundaries, rider capability a
 ### First vertical slice
 
 - Select any accessible saved route from the Readiness workspace.
-- Divide route distance, ascent and estimated moving time by the planned day count.
-- Compare those daily targets with the signed-in rider's latest year of cycling summaries.
+- Derive day stages from saved overnight anchors, falling back to Copilot distance targets or an explicit equal split.
+- Compare the hardest stage distances, climbing loads and moving times with the signed-in rider's latest year of cycling summaries.
 - Calculate deterministic distance, climbing, duration, recent-volume, recency and consecutive-day factors.
 - Return a versioned score, confidence, largest gap, comparable completed rides and explicit unknowns.
 - Keep Strava history and scores private to the rider, including on shared trips.
@@ -42,7 +42,7 @@ The product is not a generic hotel browser. Route boundaries, rider capability a
 +---------------------------------------------------------------+
 | Route to assess [The Summit Leg Breaker - 1 day             v] |
 +----------------------+----------------------------------------+
-|  READINESS 78/100    | 105 km/day | 1,117 m/day | 7h/day      |
+|  READINESS 78/100    | Hardest stage: day 2 - 105 km / 1,117 m |
 |  Viable with prep    |                                        |
 +----------------------+----------------------------------------+
 | Distance  | Climbing | Duration | Volume | Recency | Back-back |
@@ -54,7 +54,6 @@ The product is not a generic hotel browser. Route boundaries, rider capability a
 ### Next Phase A increments
 
 - Strava webhook handling for activity create, update, delete and deauthorization.
-- Stage-aware scoring using the actual day boundaries instead of averages.
 - Terrain and bicycle-type relevance.
 - Optional heart-rate and power drift after activity streams are imported.
 - A deterministic evidence packet for the Expedition Copilot.

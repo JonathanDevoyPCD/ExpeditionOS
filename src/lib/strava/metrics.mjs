@@ -1,4 +1,4 @@
-export const READINESS_RULE_VERSION = "readiness-v1";
+export const READINESS_RULE_VERSION = "readiness-v2";
 
 export function buildStravaReadinessSummary(activities, now = new Date()) {
   const thirtyDaysAgo = now.getTime() - 30 * dayMs;
@@ -23,10 +23,14 @@ export function buildStravaReadinessSummary(activities, now = new Date()) {
 export function buildRouteReadinessReport(activities, target, now = new Date()) {
   const ordered = [...activities].sort((a, b) => Date.parse(b.start_date) - Date.parse(a.start_date));
   const days = clamp(Math.round(target.days || 1), 1, 30);
+  const stages = readinessStages(target, days);
+  const stageSource = target.stages?.length === days ? (target.stageSource ?? "equal_split") : "equal_split";
   const dailyDistanceKm = target.distanceKm / days;
   const dailyAscentM = target.ascentM / days;
   const dailyMovingMinutes = target.estimatedMovingMinutes / days;
-  const targetDensity = target.distanceKm > 0 ? target.ascentM / target.distanceKm : 0;
+  const hardestStage = [...stages].sort((a, b) => stageLoad(b, { dailyDistanceKm, dailyAscentM, dailyMovingMinutes }) - stageLoad(a, { dailyDistanceKm, dailyAscentM, dailyMovingMinutes }))[0];
+  const distanceStage = [...stages].sort((a, b) => b.distanceKm - a.distanceKm)[0];
+  const durationStage = [...stages].sort((a, b) => b.estimatedMovingMinutes - a.estimatedMovingMinutes)[0];
   const ninetyDaysAgo = now.getTime() - 90 * dayMs;
   const recent90 = ordered.filter((activity) => Date.parse(activity.start_date) >= ninetyDaysAgo);
   const recent30 = ordered.filter((activity) => Date.parse(activity.start_date) >= now.getTime() - 30 * dayMs);
@@ -41,16 +45,21 @@ export function buildRouteReadinessReport(activities, target, now = new Date()) 
   const bestAscent365 = best(ordered, ascent);
   const bestDuration90 = best(recent90, duration);
   const bestDuration365 = best(ordered, duration);
-  const climbingRides90 = recent90.filter((activity) => distance(activity) >= Math.min(20, Math.max(8, dailyDistanceKm * 0.2)));
-  const climbingRides365 = ordered.filter((activity) => distance(activity) >= Math.min(20, Math.max(8, dailyDistanceKm * 0.2)));
+  const climbingRides90 = recent90.filter((activity) => distance(activity) >= Math.min(20, Math.max(8, distanceStage.distanceKm * 0.2)));
+  const climbingRides365 = ordered.filter((activity) => distance(activity) >= Math.min(20, Math.max(8, distanceStage.distanceKm * 0.2)));
   const bestDensity90 = best(climbingRides90, density);
   const bestDensity365 = best(climbingRides365, density);
   const recent30Distance = recent30.reduce((sum, activity) => sum + distance(activity), 0);
-  const distanceScore = capacityScore(dailyDistanceKm, bestDistance90, bestDistance365);
-  const ascentScore = capacityScore(dailyAscentM, bestAscent90, bestAscent365);
-  const densityScore = capacityScore(targetDensity, bestDensity90, bestDensity365);
-  const climbingScore = Math.round(ascentScore * 0.7 + densityScore * 0.3);
-  const durationScore = capacityScore(dailyMovingMinutes, bestDuration90, bestDuration365);
+  const distanceScore = capacityScore(distanceStage.distanceKm, bestDistance90, bestDistance365);
+  const climbingEvaluations = stages.map((stage) => {
+    const targetDensity = stage.distanceKm > 0 ? stage.ascentM / stage.distanceKm : 0;
+    const ascentScore = capacityScore(stage.ascentM, bestAscent90, bestAscent365);
+    const densityScore = capacityScore(targetDensity, bestDensity90, bestDensity365);
+    return { stage, targetDensity, score: Math.round(ascentScore * 0.7 + densityScore * 0.3) };
+  });
+  const climbingEvaluation = [...climbingEvaluations].sort((a, b) => a.score - b.score)[0];
+  const climbingScore = climbingEvaluation.score;
+  const durationScore = capacityScore(durationStage.estimatedMovingMinutes, bestDuration90, bestDuration365);
   const volumeScore = capacityScore(target.distanceKm, recent30Distance, recent30Distance);
   const qualifyingDistanceKm = Math.min(40, Math.max(15, dailyDistanceKm * 0.35));
   const longestBlock = longestConsecutiveBlock(ordered.filter((activity) => distance(activity) >= qualifyingDistanceKm));
@@ -60,14 +69,14 @@ export function buildRouteReadinessReport(activities, target, now = new Date()) 
   const confidence = buildConfidence(ordered, recent90, daysSinceLastRide);
 
   const factors = [
-    factor("distance", "Daily distance", distanceScore, confidence.level,
-      `${round(dailyDistanceKm, 1)} km planned per day`,
+    factor("distance", "Hardest-stage distance", distanceScore, confidence.level,
+      `Day ${distanceStage.day} is the longest stage at ${round(distanceStage.distanceKm, 1)} km`,
       [`Best ride in 90 days: ${round(bestDistance90, 1)} km`, `Best imported ride: ${round(bestDistance365, 1)} km`]),
-    factor("climbing", "Daily climbing", climbingScore, confidence.level,
-      `${Math.round(dailyAscentM).toLocaleString()} m ascent per day at ${round(targetDensity, 1)} m/km`,
+    factor("climbing", "Hardest-stage climbing", climbingScore, confidence.level,
+      `Day ${climbingEvaluation.stage.day} has ${Math.round(climbingEvaluation.stage.ascentM).toLocaleString()} m ascent at ${round(climbingEvaluation.targetDensity, 1)} m/km`,
       [`Best 90-day ascent: ${Math.round(bestAscent90).toLocaleString()} m`, `Best comparable climbing density: ${round(Math.max(bestDensity90, bestDensity365), 1)} m/km`]),
     factor("duration", "Time in the saddle", durationScore, confidence.level,
-      `${formatMinutes(Math.round(dailyMovingMinutes))} estimated moving time per day`,
+      `Day ${durationStage.day} is estimated at ${formatMinutes(Math.round(durationStage.estimatedMovingMinutes))} moving time`,
       [`Longest 90-day ride: ${formatMinutes(Math.round(bestDuration90))}`, `Longest imported ride: ${formatMinutes(Math.round(bestDuration365))}`]),
     factor("training_volume", "Recent training volume", volumeScore, confidence.level,
       `${round(recent30Distance, 1)} km completed in the last 30 days`,
@@ -112,6 +121,9 @@ export function buildRouteReadinessReport(activities, target, now = new Date()) 
       dailyDistanceKm: round(dailyDistanceKm, 1),
       dailyAscentM: Math.round(dailyAscentM),
       dailyMovingMinutes: Math.round(dailyMovingMinutes),
+      stageSource,
+      stages,
+      hardestStage,
     },
     overallScore,
     verdict,
@@ -119,15 +131,51 @@ export function buildRouteReadinessReport(activities, target, now = new Date()) 
     confidence,
     criticalFactorId: criticalFactor.id,
     factors,
-    comparableActivities: comparableActivities(ordered, { dailyDistanceKm, dailyAscentM, dailyMovingMinutes }),
+    comparableActivities: comparableActivities(ordered, {
+      dailyDistanceKm: hardestStage.distanceKm,
+      dailyAscentM: hardestStage.ascentM,
+      dailyMovingMinutes: hardestStage.estimatedMovingMinutes,
+    }),
     strengths,
     gaps,
     unknowns: [
       "Surface, technical difficulty, weather, luggage weight and live access are not included in this score.",
+      ...(days > 1 && stageSource === "equal_split" ? ["No complete set of overnight boundaries is saved, so daily load uses an equal route split."] : []),
+      ...(days > 1 && stageSource === "copilot_targets" ? ["Stage boundaries use Copilot distance targets until overnight locations are confirmed."] : []),
       ...(days > 1 && longestBlock < days ? ["Imported history does not yet demonstrate the planned number of consecutive riding days."] : []),
       ...(ordered.length < 6 ? ["A small activity history limits the confidence of this comparison."] : []),
     ],
   };
+}
+
+function readinessStages(target, days) {
+  if (Array.isArray(target.stages) && target.stages.length === days) {
+    return target.stages.map((stage, index) => ({
+      day: index + 1,
+      startKm: round(stage.startKm, 2),
+      endKm: round(stage.endKm, 2),
+      distanceKm: round(stage.distanceKm, 1),
+      ascentM: Math.round(stage.ascentM),
+      descentM: Math.round(stage.descentM ?? 0),
+      estimatedMovingMinutes: Math.max(1, Math.round(stage.estimatedMovingMinutes)),
+    }));
+  }
+  return Array.from({ length: days }, (_, index) => ({
+    day: index + 1,
+    startKm: round(target.distanceKm * (index / days), 2),
+    endKm: round(target.distanceKm * ((index + 1) / days), 2),
+    distanceKm: round(target.distanceKm / days, 1),
+    ascentM: Math.round(target.ascentM / days),
+    descentM: 0,
+    estimatedMovingMinutes: Math.max(1, Math.round(target.estimatedMovingMinutes / days)),
+  }));
+}
+
+function stageLoad(stage, averages) {
+  const ratio = (value, average) => average > 0 ? value / average : 0;
+  return ratio(stage.distanceKm, averages.dailyDistanceKm) * 0.4
+    + ratio(stage.ascentM, averages.dailyAscentM) * 0.4
+    + ratio(stage.estimatedMovingMinutes, averages.dailyMovingMinutes) * 0.2;
 }
 
 const dayMs = 24 * 60 * 60 * 1000;

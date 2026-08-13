@@ -25,6 +25,18 @@ export type StravaMetricActivity = StravaSummaryMetricActivity & {
   sport_type: string;
 };
 
+export type RouteReadinessStageTarget = {
+  day: number;
+  startKm: number;
+  endKm: number;
+  distanceKm: number;
+  ascentM: number;
+  descentM: number;
+  estimatedMovingMinutes: number;
+};
+
+export type RouteReadinessStageSource = "overnight_anchors" | "copilot_targets" | "equal_split";
+
 export type RouteReadinessTarget = {
   id: string;
   name: string;
@@ -32,6 +44,8 @@ export type RouteReadinessTarget = {
   distanceKm: number;
   ascentM: number;
   estimatedMovingMinutes: number;
+  stages?: RouteReadinessStageTarget[];
+  stageSource?: RouteReadinessStageSource;
 };
 
 export type ReadinessConfidence = "low" | "moderate" | "high";
@@ -60,12 +74,15 @@ export type ComparableStravaActivity = {
 };
 
 export type RouteReadinessReport = {
-  ruleVersion: "readiness-v1";
+  ruleVersion: "readiness-v2";
   generatedAt: string;
   route: RouteReadinessTarget & {
     dailyDistanceKm: number;
     dailyAscentM: number;
     dailyMovingMinutes: number;
+    stageSource: RouteReadinessStageSource;
+    stages: RouteReadinessStageTarget[];
+    hardestStage: RouteReadinessStageTarget;
   };
   overallScore: number;
   verdict: ReadinessVerdict;
