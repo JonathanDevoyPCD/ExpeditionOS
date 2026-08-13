@@ -64,7 +64,7 @@ Set `SITE_URL` to that exact origin and add it to the Supabase Auth Site URL and
 
 ExpeditionOS uses the Supabase publishable key in the browser. The secret key is never included in client bundles. Add the local and production application URLs to the Supabase Auth redirect allow-list.
 
-Email is the canonical identity. The app works with Supabase's default secure sign-in link and also accepts a six-digit email code when the project's email template contains `{{ .Token }}`. New Supabase Free projects require custom SMTP before auth email templates can be customized.
+Email is the canonical identity and ExpeditionOS uses six-digit email OTPs, not magic links. The hosted Supabase project must use custom SMTP so its **Confirm signup** and **Magic Link** templates can contain `{{ .Token }}`. New Supabase Free projects cannot customize auth templates while using Supabase's default SMTP. See `docs/supabase-email-otp.md` for the required configuration.
 
 SMS preference is captured at signup, but SMS delivery stays disabled until an SMS provider is configured in Supabase Auth. After that configuration is complete, set `SUPABASE_PHONE_OTP_ENABLED=true` and add the phone-verification step before offering phone sign-in.
 

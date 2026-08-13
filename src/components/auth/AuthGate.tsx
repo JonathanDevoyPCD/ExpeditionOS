@@ -169,7 +169,7 @@ function OtpAccess() {
             </div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#86b9b0]/65">{step === "code" ? "Check your inbox" : mode === "signup" ? "New expedition profile" : "Welcome back"}</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">{step === "code" ? "Enter your code" : mode === "signup" ? "Create your profile" : "Open your workspace"}</h2>
-            <p className="mt-3 text-xs leading-6 text-[#d0d6d6]/45">{step === "code" ? `A secure sign-in code or link was sent to ${email}.` : "No passwords to remember. We will send you a secure one-time sign-in email."}</p>
+            <p className="mt-3 text-xs leading-6 text-[#d0d6d6]/45">{step === "code" ? `A six-digit sign-in code was sent to ${email}.` : "No passwords to remember. We will email you a six-digit one-time code."}</p>
 
             {step === "details" ? (
               <div className="mt-7 space-y-4">
