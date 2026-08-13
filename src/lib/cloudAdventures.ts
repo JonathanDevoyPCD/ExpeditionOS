@@ -1,6 +1,7 @@
 import type { Json } from "@/types/database";
 import type { AdventureAccessRole, AdventurePlan, AdventureVisibility } from "@/types/adventure";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { TRIP_PEOPLE_SELECT } from "@/lib/tripPeopleQuery";
 
 export type TripMember = {
   userId: string;
@@ -83,7 +84,7 @@ export async function deleteCloudAdventure(id: string) {
 export async function loadTripPeople(adventureId: string) {
   const supabase = getSupabaseBrowserClient();
   const [membersResult, invitationsResult] = await Promise.all([
-    supabase.from("adventure_members").select("user_id, role, share_emergency_profile, profiles(first_name, last_name, display_name)").eq("adventure_id", adventureId).eq("status", "accepted"),
+    supabase.from("adventure_members").select(TRIP_PEOPLE_SELECT).eq("adventure_id", adventureId).eq("status", "accepted"),
     supabase.from("adventure_invitations").select("id, invitee_email, role, status").eq("adventure_id", adventureId).order("created_at", { ascending: false }),
   ]);
   if (membersResult.error) throw membersResult.error;
