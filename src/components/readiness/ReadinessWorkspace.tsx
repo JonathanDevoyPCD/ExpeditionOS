@@ -19,14 +19,15 @@ import {
   Unlink,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { buildRouteStages } from "@/lib/routeStages";
 import { disconnectStravaAccount, loadRouteReadiness, loadStravaStatus, startStravaConnection, syncStravaNow } from "@/lib/strava/client";
-import type { AdventurePlan } from "@/types/adventure";
+import type { AdventurePlan, CopilotBlueprint, RouteAnchor } from "@/types/adventure";
 import type { ExpeditionProfile } from "@/types/profile";
 import type { RouteDataset } from "@/types/route";
 import type { RouteReadinessFactor, RouteReadinessReport, RouteReadinessTarget, StravaConnectionStatus } from "@/types/strava";
 
 type Icon = ComponentType<{ className?: string }>;
-type RouteOption = { key: string; route: RouteDataset; days: number; source: string };
+type RouteOption = { key: string; route: RouteDataset; days: number; source: string; anchors: RouteAnchor[]; blueprint: CopilotBlueprint | null };
 
 export default function ReadinessWorkspace({ profile, adventures, activeRoute }: { profile: ExpeditionProfile; adventures: AdventurePlan[]; activeRoute: RouteDataset }) {
   const [status, setStatus] = useState<StravaConnectionStatus | null>(null);
@@ -38,8 +39,8 @@ export default function ReadinessWorkspace({ profile, adventures, activeRoute }:
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const routeOptions = useMemo<RouteOption[]>(() => {
-    const saved: RouteOption[] = adventures.map((adventure) => ({ key: adventure.id, route: adventure.route, days: adventure.days, source: adventure.source }));
-    if (!saved.some((option) => option.route.id === activeRoute.id)) saved.unshift({ key: `active:${activeRoute.id}`, route: activeRoute, days: 1, source: "active route" });
+    const saved: RouteOption[] = adventures.map((adventure) => ({ key: adventure.id, route: adventure.route, days: adventure.days, source: adventure.source, anchors: adventure.anchors, blueprint: adventure.blueprint ?? null }));
+    if (!saved.some((option) => option.route.id === activeRoute.id)) saved.unshift({ key: `active:${activeRoute.id}`, route: activeRoute, days: 1, source: "active route", anchors: [], blueprint: null });
     return saved;
   }, [activeRoute, adventures]);
   const initialOption = routeOptions.find((option) => option.route.id === activeRoute.id) ?? routeOptions[0];
@@ -76,6 +77,7 @@ export default function ReadinessWorkspace({ profile, adventures, activeRoute }:
       setReportLoading(true);
       setReportError(null);
     });
+    const stagePlan = buildRouteStages(selectedOption.route, selectedOption.days, selectedOption.anchors, selectedOption.blueprint);
     const target: RouteReadinessTarget = {
       id: selectedOption.route.id,
       name: selectedOption.route.name,
@@ -83,6 +85,8 @@ export default function ReadinessWorkspace({ profile, adventures, activeRoute }:
       distanceKm: selectedOption.route.metrics.distanceKm,
       ascentM: selectedOption.route.metrics.ascentM,
       estimatedMovingMinutes: selectedOption.route.metrics.estimatedMovingMinutes,
+      stages: stagePlan.stages,
+      stageSource: stagePlan.source,
     };
     loadRouteReadiness(target)
       .then((result) => { if (active) setReport(result); })
@@ -184,8 +188,10 @@ function ReadinessReportView({ report }: { report: RouteReadinessReport }) {
   return <div className="mt-6">
     <div className="grid gap-4 xl:grid-cols-[260px_1fr]">
       <article className="rounded-[22px] border border-[#86b9b0]/15 bg-[#86b9b0]/[0.06] p-6"><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#86b9b0]/58">Overall readiness</p><div className="mt-5 flex items-end gap-2"><span className={`text-6xl font-semibold tracking-[-0.07em] ${verdictTone}`}>{report.overallScore}</span><span className="pb-2 text-sm text-[#d0d6d6]/38">/ 100</span></div><p className={`mt-4 text-sm font-semibold ${verdictTone}`}>{report.verdictLabel}</p><p className="mt-2 text-[10px] leading-5 text-[#d0d6d6]/40">{report.confidence.level} confidence · {report.confidence.summary}</p></article>
-      <div className="grid gap-3 sm:grid-cols-3"><TargetMetric icon={RouteIcon} label="Per day" value={`${report.route.dailyDistanceKm} km`} note={`${report.route.days} riding day${report.route.days === 1 ? "" : "s"}`} /><TargetMetric icon={Mountain} label="Climbing" value={`${report.route.dailyAscentM.toLocaleString()} m`} note="Average ascent per day" /><TargetMetric icon={Clock3} label="Moving time" value={formatMinutes(report.route.dailyMovingMinutes)} note="Estimated per day" /></div>
+      <div className="grid gap-3 sm:grid-cols-3"><TargetMetric icon={RouteIcon} label="Hardest day" value={`Day ${report.route.hardestStage.day} · ${report.route.hardestStage.distanceKm} km`} note={`${report.route.days} riding day${report.route.days === 1 ? "" : "s"}`} /><TargetMetric icon={Mountain} label="Hardest-day climbing" value={`${report.route.hardestStage.ascentM.toLocaleString()} m`} note={`${report.route.hardestStage.descentM.toLocaleString()} m descent`} /><TargetMetric icon={Clock3} label="Hardest-day time" value={formatMinutes(report.route.hardestStage.estimatedMovingMinutes)} note="Estimated moving time" /></div>
     </div>
+
+    {report.route.days > 1 && <article className="mt-4 rounded-[22px] border border-white/[0.07] bg-[#041421]/35 p-5"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h4 className="text-sm font-semibold text-white">Stage load</h4><p className="mt-1 text-[10px] text-[#d0d6d6]/38">The readiness score tests the demanding days rather than hiding them inside a trip average.</p></div><span className="w-fit rounded-full border border-[#86b9b0]/15 bg-[#86b9b0]/[0.06] px-3 py-1.5 text-[8px] font-bold uppercase tracking-[0.12em] text-[#86b9b0]/70">{stageSourceLabel(report.route.stageSource)}</span></div><div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{report.route.stages.map((stage) => { const hardest = stage.day === report.route.hardestStage.day; return <div key={stage.day} className={`rounded-xl border p-3 ${hardest ? "border-[#86b9b0]/30 bg-[#86b9b0]/[0.08]" : "border-white/[0.06] bg-[#042630]/38"}`}><div className="flex items-center justify-between"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#86b9b0]">Day {stage.day}</p>{hardest && <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-[#b8ddd6]">Hardest</span>}</div><p className="mt-2 text-sm font-semibold text-white">{stage.distanceKm} km</p><p className="mt-1 text-[9px] leading-4 text-[#d0d6d6]/38">{stage.ascentM.toLocaleString()} m up · {formatMinutes(stage.estimatedMovingMinutes)}</p></div>; })}</div></article>}
 
     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{report.factors.map((factor) => <FactorCard key={factor.id} factor={factor} critical={factor.id === report.criticalFactorId} />)}</div>
 
@@ -213,3 +219,4 @@ function ReadinessLoading() { return <div className="grid min-h-[60vh] place-ite
 function formatDateTime(value: string) { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
 function formatDate(value: string) { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value)); }
 function formatMinutes(minutes: number) { const hours = Math.floor(minutes / 60); const remainder = minutes % 60; return hours ? `${hours}h ${remainder}m` : `${remainder}m`; }
+function stageSourceLabel(source: RouteReadinessReport["route"]["stageSource"]) { return source === "overnight_anchors" ? "Confirmed overnight stages" : source === "copilot_targets" ? "Copilot target stages" : "Equal route split"; }

@@ -56,7 +56,7 @@ test("builds an inspectable route-specific readiness report", () => {
     estimatedMovingMinutes: 422,
   }, now);
 
-  assert.equal(report.ruleVersion, "readiness-v1");
+  assert.equal(report.ruleVersion, "readiness-v2");
   assert.equal(report.route.dailyDistanceKm, 105.4);
   assert.equal(report.factors.some((factor) => factor.id === "consecutive_days"), false);
   assert.equal(report.comparableActivities[0].name, "Century prep");
@@ -90,6 +90,38 @@ test("multi-day plans preserve a consecutive-day gap", () => {
   assert.equal(consecutive.status, "gap");
   assert.equal(report.criticalFactorId, "consecutive_days");
   assert.ok(report.overallScore <= consecutive.score + 25);
+});
+
+test("stage-aware readiness surfaces a hard day instead of averaging it away", () => {
+  const activities = [
+    activity(1, "Steady 70", "2026-08-10T08:00:00Z", 70, 700, 260),
+    activity(2, "Steady 65", "2026-08-03T08:00:00Z", 65, 650, 240),
+    activity(3, "Steady 60", "2026-07-27T08:00:00Z", 60, 600, 220),
+    activity(4, "Steady 55", "2026-07-20T08:00:00Z", 55, 550, 200),
+    activity(5, "Steady 50", "2026-07-13T08:00:00Z", 50, 500, 180),
+    activity(6, "Steady 45", "2026-07-06T08:00:00Z", 45, 450, 165),
+  ];
+  const report = buildRouteReadinessReport(activities, {
+    id: "uneven-tour",
+    name: "Uneven tour",
+    days: 3,
+    distanceKm: 180,
+    ascentM: 2_400,
+    estimatedMovingMinutes: 720,
+    stageSource: "overnight_anchors",
+    stages: [
+      { day: 1, startKm: 0, endKm: 40, distanceKm: 40, ascentM: 300, descentM: 200, estimatedMovingMinutes: 150 },
+      { day: 2, startKm: 40, endKm: 140, distanceKm: 100, ascentM: 1_800, descentM: 1_500, estimatedMovingMinutes: 420 },
+      { day: 3, startKm: 140, endKm: 180, distanceKm: 40, ascentM: 300, descentM: 400, estimatedMovingMinutes: 150 },
+    ],
+  }, new Date("2026-08-13T12:00:00Z"));
+
+  assert.equal(report.route.hardestStage.day, 2);
+  assert.equal(report.route.stageSource, "overnight_anchors");
+  assert.equal(report.route.dailyDistanceKm, 60);
+  assert.match(report.factors.find((factor) => factor.id === "distance").summary, /Day 2/);
+  assert.ok(report.factors.find((factor) => factor.id === "distance").score < 85);
+  assert.equal(report.unknowns.some((item) => item.includes("equal route split")), false);
 });
 
 function activity(activity_id, name, start_date, distanceKm, ascentM, movingMinutes) {
