@@ -1,4 +1,4 @@
-export const READINESS_RULE_VERSION = "readiness-v2";
+export const READINESS_RULE_VERSION = "readiness-v3";
 
 export function buildStravaReadinessSummary(activities, now = new Date()) {
   const thirtyDaysAgo = now.getTime() - 30 * dayMs;
@@ -23,6 +23,10 @@ export function buildStravaReadinessSummary(activities, now = new Date()) {
 export function buildRouteReadinessReport(activities, target, now = new Date()) {
   const ordered = [...activities].sort((a, b) => Date.parse(b.start_date) - Date.parse(a.start_date));
   const days = clamp(Math.round(target.days || 1), 1, 30);
+  const hasBicycleContext = ["Road", "Hybrid", "Mountain"].includes(target.bicycleType);
+  const bicycleType = hasBicycleContext ? target.bicycleType : "Hybrid";
+  const terrainProfile = ["road", "mixed", "off_road", "unknown"].includes(target.terrainProfile) ? target.terrainProfile : "unknown";
+  const maxGradePct = Number.isFinite(target.maxGradePct) ? round(Math.max(0, target.maxGradePct), 1) : null;
   const stages = readinessStages(target, days);
   const stageSource = target.stages?.length === days ? (target.stageSource ?? "equal_split") : "equal_split";
   const dailyDistanceKm = target.distanceKm / days;
@@ -67,6 +71,7 @@ export function buildRouteReadinessReport(activities, target, now = new Date()) 
   const daysSinceLastRide = ordered[0] ? Math.max(0, Math.floor((now.getTime() - Date.parse(ordered[0].start_date)) / dayMs)) : null;
   const recencyScore = scoreRecency(daysSinceLastRide);
   const confidence = buildConfidence(ordered, recent90, daysSinceLastRide);
+  const terrain = terrainRelevance(ordered, recent90, hardestStage, bicycleType, terrainProfile, hasBicycleContext, confidence.level);
 
   const factors = [
     factor("distance", "Hardest-stage distance", distanceScore, confidence.level,
@@ -84,6 +89,7 @@ export function buildRouteReadinessReport(activities, target, now = new Date()) 
     factor("recency", "Training recency", recencyScore, ordered.length ? confidence.level : "low",
       daysSinceLastRide === null ? "No imported rides are available" : `Latest ride was ${daysSinceLastRide} day${daysSinceLastRide === 1 ? "" : "s"} ago`,
       [ordered[0] ? `Latest evidence: ${formatDate(ordered[0].start_date)}` : "Connect and sync Strava to add evidence"]),
+    factor("terrain", "Terrain and bicycle fit", terrain.score, terrain.confidence, terrain.summary, terrain.evidence),
   ];
 
   if (days > 1) {
@@ -98,6 +104,7 @@ export function buildRouteReadinessReport(activities, target, now = new Date()) 
     duration: 0.18,
     training_volume: 0.15,
     recency: 0.1,
+    terrain: 0.12,
     consecutive_days: 0.1,
   };
   const totalWeight = factors.reduce((sum, item) => sum + weights[item.id], 0);
@@ -107,44 +114,57 @@ export function buildRouteReadinessReport(activities, target, now = new Date()) 
   const verdict = verdictFor(overallScore, criticalFactor.score, ordered.length);
   const strengths = factors.filter((item) => item.score >= 75).map((item) => item.summary);
   const gaps = factors.filter((item) => item.score < 60).map((item) => item.summary);
+  const comparable = comparableActivities(ordered, {
+    dailyDistanceKm: hardestStage.distanceKm,
+    dailyAscentM: hardestStage.ascentM,
+    dailyMovingMinutes: hardestStage.estimatedMovingMinutes,
+  });
+  const physiology = buildPhysiologyEvidence(ordered);
+  const unknowns = [
+    ...(terrainProfile === "unknown" ? ["The route surface is not verified, so terrain relevance uses the saved bicycle setup and sport-type history only."] : []),
+    "Weather, luggage weight and live access are not included in this score.",
+    ...(days > 1 && stageSource === "equal_split" ? ["No complete set of overnight boundaries is saved, so daily load uses an equal route split."] : []),
+    ...(days > 1 && stageSource === "copilot_targets" ? ["Stage boundaries use Copilot distance targets until overnight locations are confirmed."] : []),
+    ...(days > 1 && longestBlock < days ? ["Imported history does not yet demonstrate the planned number of consecutive riding days."] : []),
+    ...(ordered.length < 6 ? ["A small activity history limits the confidence of this comparison."] : []),
+    ...(physiology.status === "unavailable" ? ["No usable heart-rate or power stream insight is available; physiology does not affect the readiness score."] : []),
+  ];
+  const generatedAt = now.toISOString();
+  const route = {
+    id: target.id,
+    name: target.name,
+    days,
+    distanceKm: round(target.distanceKm, 1),
+    ascentM: Math.round(target.ascentM),
+    estimatedMovingMinutes: Math.round(target.estimatedMovingMinutes),
+    dailyDistanceKm: round(dailyDistanceKm, 1),
+    dailyAscentM: Math.round(dailyAscentM),
+    dailyMovingMinutes: Math.round(dailyMovingMinutes),
+    stageSource,
+    stages,
+    hardestStage,
+    bicycleType,
+    terrainProfile,
+    maxGradePct,
+  };
+  const copilotEvidence = buildCopilotEvidence({ generatedAt, now, route, overallScore, verdict, confidence, criticalFactor, factors, comparable, physiology, unknowns });
 
   return {
     ruleVersion: READINESS_RULE_VERSION,
-    generatedAt: now.toISOString(),
-    route: {
-      id: target.id,
-      name: target.name,
-      days,
-      distanceKm: round(target.distanceKm, 1),
-      ascentM: Math.round(target.ascentM),
-      estimatedMovingMinutes: Math.round(target.estimatedMovingMinutes),
-      dailyDistanceKm: round(dailyDistanceKm, 1),
-      dailyAscentM: Math.round(dailyAscentM),
-      dailyMovingMinutes: Math.round(dailyMovingMinutes),
-      stageSource,
-      stages,
-      hardestStage,
-    },
+    generatedAt,
+    route,
     overallScore,
     verdict,
     verdictLabel: verdictLabel(verdict),
     confidence,
     criticalFactorId: criticalFactor.id,
     factors,
-    comparableActivities: comparableActivities(ordered, {
-      dailyDistanceKm: hardestStage.distanceKm,
-      dailyAscentM: hardestStage.ascentM,
-      dailyMovingMinutes: hardestStage.estimatedMovingMinutes,
-    }),
+    comparableActivities: comparable,
+    physiology,
+    copilotEvidence,
     strengths,
     gaps,
-    unknowns: [
-      "Surface, technical difficulty, weather, luggage weight and live access are not included in this score.",
-      ...(days > 1 && stageSource === "equal_split" ? ["No complete set of overnight boundaries is saved, so daily load uses an equal route split."] : []),
-      ...(days > 1 && stageSource === "copilot_targets" ? ["Stage boundaries use Copilot distance targets until overnight locations are confirmed."] : []),
-      ...(days > 1 && longestBlock < days ? ["Imported history does not yet demonstrate the planned number of consecutive riding days."] : []),
-      ...(ordered.length < 6 ? ["A small activity history limits the confidence of this comparison."] : []),
-    ],
+    unknowns,
   };
 }
 
@@ -176,6 +196,137 @@ function stageLoad(stage, averages) {
   return ratio(stage.distanceKm, averages.dailyDistanceKm) * 0.4
     + ratio(stage.ascentM, averages.dailyAscentM) * 0.4
     + ratio(stage.estimatedMovingMinutes, averages.dailyMovingMinutes) * 0.2;
+}
+
+function terrainRelevance(activities, recent90, hardestStage, bicycleType, terrainProfile, hasBicycleContext, confidence) {
+  if (!hasBicycleContext) {
+    return {
+      score: 65,
+      confidence: "low",
+      summary: "No bicycle setup is saved; Hybrid is used as a neutral comparison",
+      evidence: ["Save Road, Hybrid or Mountain preferences on the route for a specific terrain comparison"],
+    };
+  }
+  const weightedBest = (items) => Math.max(0, ...items.map((activity) => activity.distance_m / 1000 * terrainCompatibility(activity.sport_type, bicycleType, terrainProfile)));
+  const weightedCount = (items) => items.reduce((sum, activity) => sum + terrainCompatibility(activity.sport_type, bicycleType, terrainProfile), 0);
+  const recentBest = weightedBest(recent90);
+  const historicalBest = weightedBest(activities);
+  const capability = capacityScore(hardestStage.distanceKm, recentBest, historicalBest);
+  const coverage = clamp(Math.round(weightedCount(recent90) * 12 + weightedCount(activities) * 3), 0, 100);
+  const score = Math.round(capability * 0.72 + coverage * 0.28);
+  const context = terrainProfile === "unknown" ? "surface unverified" : `${terrainProfile.replace("_", "-")} surface`;
+  return {
+    score,
+    confidence: terrainProfile === "unknown" ? "low" : confidence,
+    summary: `${bicycleType} setup with ${context}; best relevant ride equivalent is ${round(Math.max(recentBest, historicalBest), 1)} km`,
+    evidence: [
+      `${round(weightedCount(recent90), 1)} weighted relevant rides in 90 days`,
+      `Hardest planned stage: ${round(hardestStage.distanceKm, 1)} km`,
+    ],
+  };
+}
+
+function terrainCompatibility(sportType, bicycleType, terrainProfile) {
+  const sport = String(sportType ?? "");
+  const road = new Set(["Ride", "VirtualRide", "EBikeRide", "Velomobile", "Handcycle"]);
+  const gravel = sport === "GravelRide";
+  const mountain = sport === "MountainBikeRide" || sport === "EMountainBikeRide";
+  const profile = terrainProfile === "unknown" ? (bicycleType === "Road" ? "road" : bicycleType === "Mountain" ? "off_road" : "mixed") : terrainProfile;
+  if (profile === "road") return road.has(sport) ? 1 : gravel ? 0.55 : mountain ? 0.3 : 0.2;
+  if (profile === "off_road") return mountain ? 1 : gravel ? 0.82 : road.has(sport) ? (sport === "VirtualRide" ? 0.2 : 0.42) : 0.2;
+  return gravel ? 1 : mountain ? 0.82 : road.has(sport) ? (sport === "VirtualRide" ? 0.45 : 0.85) : 0.25;
+}
+
+function buildPhysiologyEvidence(activities) {
+  const analyzed = activities.filter((activity) => Number(activity.stream_sample_count) >= 20);
+  const heartRate = finiteValues(analyzed.map((activity) => activity.heart_rate_drift_pct));
+  const power = finiteValues(analyzed.map((activity) => activity.power_fade_pct));
+  const paired = finiteValues(analyzed.map((activity) => activity.aerobic_decoupling_pct));
+  const medianHeartRateDriftPct = median(heartRate);
+  const medianPowerFadePct = median(power);
+  const medianAerobicDecouplingPct = median(paired);
+  const evidence = [
+    ...(medianHeartRateDriftPct === null ? [] : [`Median heart-rate drift: ${formatSigned(medianHeartRateDriftPct)}%`]),
+    ...(medianPowerFadePct === null ? [] : [`Median power fade: ${formatSigned(medianPowerFadePct)}%`]),
+    ...(medianAerobicDecouplingPct === null ? [] : [`Median aerobic decoupling: ${formatSigned(medianAerobicDecouplingPct)}%`]),
+  ];
+  if (!analyzed.length) {
+    return {
+      status: "unavailable",
+      analyzedActivities: 0,
+      heartRateActivities: 0,
+      powerActivities: 0,
+      pairedActivities: 0,
+      medianHeartRateDriftPct: null,
+      medianPowerFadePct: null,
+      medianAerobicDecouplingPct: null,
+      summary: "No suitable heart-rate or power streams have been analyzed yet.",
+      evidence: ["Sync recent rides recorded with a heart-rate monitor or power meter to add this optional evidence."],
+    };
+  }
+  const watch = (medianAerobicDecouplingPct ?? 0) > 8 || (medianHeartRateDriftPct ?? 0) > 10 || (medianPowerFadePct ?? 0) > 10;
+  const status = analyzed.length < 3 ? "limited" : watch ? "watch" : "stable";
+  return {
+    status,
+    analyzedActivities: analyzed.length,
+    heartRateActivities: heartRate.length,
+    powerActivities: power.length,
+    pairedActivities: paired.length,
+    medianHeartRateDriftPct,
+    medianPowerFadePct,
+    medianAerobicDecouplingPct,
+    summary: status === "limited"
+      ? `Only ${analyzed.length} stream-analyzed ride${analyzed.length === 1 ? " is" : "s are"} available, so the signal remains limited.`
+      : status === "watch"
+        ? "Recent stream summaries show material second-half cardiac drift or power fade."
+        : "Recent stream summaries show stable second-half heart-rate and power behavior.",
+    evidence,
+  };
+}
+
+function buildCopilotEvidence({ generatedAt, now, route, overallScore, verdict, confidence, criticalFactor, factors, comparable, physiology, unknowns }) {
+  return {
+    schemaVersion: "copilot-readiness-evidence-v1",
+    readinessRuleVersion: READINESS_RULE_VERSION,
+    generatedAt,
+    route: {
+      name: route.name,
+      days: route.days,
+      distanceKm: route.distanceKm,
+      ascentM: route.ascentM,
+      hardestStage: route.hardestStage,
+      bicycleType: route.bicycleType,
+      terrainProfile: route.terrainProfile,
+    },
+    assessment: { overallScore, verdict, confidence: confidence.level, criticalFactorId: criticalFactor.id },
+    factors: factors.map(({ id, score, status, summary, evidence }) => ({ id, score, status, summary, evidence })),
+    comparableEfforts: comparable.map((activity) => ({
+      sportType: activity.sportType,
+      daysAgo: Math.max(0, Math.floor((now.getTime() - Date.parse(activity.startDate)) / dayMs)),
+      distanceKm: activity.distanceKm,
+      ascentM: activity.ascentM,
+      movingMinutes: activity.movingMinutes,
+      similarityScore: activity.similarityScore,
+    })),
+    physiology,
+    unknowns,
+    dataBoundary: { rawActivityStreamsIncluded: false, routeTraceIncluded: false, athleteIdentityIncluded: false },
+  };
+}
+
+function finiteValues(values) {
+  return values.filter((value) => Number.isFinite(value)).map(Number);
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const ordered = [...values].sort((a, b) => a - b);
+  const midpoint = Math.floor(ordered.length / 2);
+  return round(ordered.length % 2 ? ordered[midpoint] : (ordered[midpoint - 1] + ordered[midpoint]) / 2, 1);
+}
+
+function formatSigned(value) {
+  return `${value > 0 ? "+" : ""}${round(value, 1)}`;
 }
 
 const dayMs = 24 * 60 * 60 * 1000;

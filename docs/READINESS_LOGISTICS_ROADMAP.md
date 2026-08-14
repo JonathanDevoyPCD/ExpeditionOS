@@ -51,17 +51,19 @@ The product is not a generic hotel browser. Route boundaries, rider capability a
 +---------------------------------------------------------------+
 ```
 
-### Next Phase A increments
+### Completed Phase A increments
 
-- Terrain and bicycle-type relevance.
-- Optional heart-rate and power drift after activity streams are imported.
-- A deterministic evidence packet for the Expedition Copilot.
+- Terrain and bicycle-type relevance uses the saved Road, Hybrid or Mountain setup and matching Strava sport history. Unverified surface remains explicit rather than inferred from the map.
+- Optional heart-rate, power-fade and aerobic-decoupling summaries are derived from a small rate-conscious set of recent activity streams. Raw stream samples are never persisted and physiology remains explanatory rather than medical or automatically score-changing evidence.
+- A deterministic `copilot-readiness-evidence-v1` packet includes compact route load, readiness factors, anonymised comparable efforts, physiology summaries and explicit unknowns without identity, route traces or raw activity streams.
 
 ### Completed Phase A reliability
 
 - Strava webhook verification and subscription tooling.
 - Immediate acknowledgement with post-response processing for activity create, update and delete events.
 - Automatic removal of encrypted connection data and imported history after Strava deauthorization.
+- Rate-limit-aware stream enrichment that stops before Strava's short-term or daily read allowance is exhausted.
+- Versioned `readiness-v3` rules with deterministic terrain relevance, stage-aware scoring and private Copilot evidence.
 
 ## Phase B: trip logistics and gear
 

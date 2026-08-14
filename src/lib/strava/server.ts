@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptStravaSecret, encryptStravaSecret } from "@/lib/strava/crypto";
 import { buildRouteReadinessReport, buildStravaReadinessSummary } from "@/lib/strava/metrics";
+import { analyzeActivityStreams } from "@/lib/strava/streamMetrics";
 import type { StravaWebhookEvent } from "@/lib/strava/webhook";
 import { getSiteUrl } from "@/lib/siteUrl";
 import type { Database } from "@/types/database";
@@ -17,6 +18,7 @@ const STRAVA_SCOPES = ["read", "activity:read_all"];
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
 const ACTIVITY_HISTORY_DAYS = 365;
 const MAX_ACTIVITY_PAGES = 5;
+const STREAM_ANALYSIS_LIMIT = 6;
 const CYCLING_SPORT_TYPES = new Set([
   "Ride",
   "MountainBikeRide",
@@ -65,6 +67,8 @@ type StravaSummaryActivity = {
   kilojoules?: number;
   average_heartrate?: number;
   max_heartrate?: number;
+  has_heartrate?: boolean;
+  device_watts?: boolean;
   suffer_score?: number;
   trainer?: boolean;
   commute?: boolean;
@@ -248,6 +252,7 @@ export async function syncStravaActivities(admin: AdminClient, userId: string) {
       const { error } = await admin.from("strava_activities").upsert(rows.slice(index, index + 500), { onConflict: "user_id,activity_id" });
       if (error) throw new Error(error.message);
     }
+    rateLimit = await syncRecentStreamInsights(admin, userId, accessToken, activities, rateLimit);
 
     const syncedAt = new Date().toISOString();
     const { error: statusError } = await admin.from("strava_connections").update({
@@ -315,7 +320,7 @@ export async function getRouteReadiness(admin: AdminClient, userId: string, targ
 
   const { data: activities, error: activitiesError } = await admin
     .from("strava_activities")
-    .select("activity_id, name, sport_type, start_date, distance_m, moving_time_s, total_elevation_gain_m")
+    .select("activity_id, name, sport_type, start_date, distance_m, moving_time_s, total_elevation_gain_m, average_heartrate, average_watts, stream_sample_count, heart_rate_drift_pct, power_fade_pct, aerobic_decoupling_pct")
     .eq("user_id", userId)
     .order("start_date", { ascending: false });
   if (activitiesError) throw new Error(activitiesError.message);
@@ -409,7 +414,11 @@ export async function processStravaWebhookEvent(admin: AdminClient, event: Strav
       { onConflict: "user_id,activity_id" },
     );
     if (upsertError) throw new Error(upsertError.message);
-    const rateLimit = readRateLimit(response.headers);
+    let rateLimit = readRateLimit(response.headers);
+    if (streamEligible(activity) && hasReadCapacity(rateLimit)) {
+      const streamResult = await syncActivityStreamInsight(admin, connection.user_id, accessToken, activity.id);
+      rateLimit = streamResult.rateLimit ?? rateLimit;
+    }
     const { error: statusError } = await admin.from("strava_connections").update({
       last_synced_at: new Date().toISOString(),
       last_sync_status: "success",
@@ -465,6 +474,61 @@ function normalizeActivity(userId: string, athleteId: number, activity: StravaSu
     kudos_count: Math.round(nonNegative(activity.kudos_count)),
     imported_at: new Date().toISOString(),
   };
+}
+
+async function syncRecentStreamInsights(admin: AdminClient, userId: string, accessToken: string, activities: StravaSummaryActivity[], initialRateLimit: RateLimitSnapshot) {
+  const candidates = activities
+    .filter((activity) => CYCLING_SPORT_TYPES.has(activity.sport_type ?? activity.type ?? "") && streamEligible(activity))
+    .slice(0, STREAM_ANALYSIS_LIMIT);
+  if (!candidates.length) return initialRateLimit;
+
+  const ids = candidates.map((activity) => activity.id);
+  const { data: existing, error } = await admin
+    .from("strava_activities")
+    .select("activity_id, stream_analyzed_at")
+    .eq("user_id", userId)
+    .in("activity_id", ids);
+  if (error) throw new Error(error.message);
+  const analyzed = new Set((existing ?? []).filter((activity) => activity.stream_analyzed_at).map((activity) => activity.activity_id));
+  let rateLimit = initialRateLimit;
+  for (const activity of candidates) {
+    if (analyzed.has(activity.id) || !hasReadCapacity(rateLimit)) continue;
+    const result = await syncActivityStreamInsight(admin, userId, accessToken, activity.id);
+    rateLimit = result.rateLimit ?? rateLimit;
+    if (result.rateLimited) break;
+  }
+  return rateLimit;
+}
+
+async function syncActivityStreamInsight(admin: AdminClient, userId: string, accessToken: string, activityId: number) {
+  const url = new URL(`${STRAVA_API_URL}/activities/${activityId}/streams`);
+  url.searchParams.set("keys", "time,heartrate,watts,moving");
+  url.searchParams.set("key_by_type", "true");
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" });
+  const rateLimit = readRateLimit(response.headers);
+  if (response.status === 429) return { rateLimit, rateLimited: true };
+  if (!response.ok && response.status !== 403 && response.status !== 404) return { rateLimit, rateLimited: false };
+  const insight = response.ok ? analyzeActivityStreams(await response.json().catch(() => null)) : analyzeActivityStreams(null);
+  const { error } = await admin.from("strava_activities").update({
+    stream_sample_count: insight.sampleCount,
+    heart_rate_drift_pct: insight.heartRateDriftPct,
+    power_fade_pct: insight.powerFadePct,
+    aerobic_decoupling_pct: insight.aerobicDecouplingPct,
+    stream_analyzed_at: new Date().toISOString(),
+  }).eq("user_id", userId).eq("activity_id", activityId);
+  if (error) throw new Error(error.message);
+  return { rateLimit, rateLimited: false };
+}
+
+function streamEligible(activity: StravaSummaryActivity) {
+  const hasSensorData = activity.has_heartrate || activity.device_watts || Number.isFinite(activity.average_heartrate) || Number.isFinite(activity.average_watts);
+  return hasSensorData && nonNegative(activity.moving_time) >= 45 * 60;
+}
+
+function hasReadCapacity(rateLimit: RateLimitSnapshot) {
+  const shortTermAvailable = rateLimit.limit15Minutes === null || rateLimit.used15Minutes === null || rateLimit.used15Minutes < rateLimit.limit15Minutes - 5;
+  const dailyAvailable = rateLimit.limitDaily === null || rateLimit.usedDaily === null || rateLimit.usedDaily < rateLimit.limitDaily - 10;
+  return shortTermAvailable && dailyAvailable;
 }
 
 function readRateLimit(headers: Headers): RateLimitSnapshot {

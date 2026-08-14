@@ -56,7 +56,7 @@ test("builds an inspectable route-specific readiness report", () => {
     estimatedMovingMinutes: 422,
   }, now);
 
-  assert.equal(report.ruleVersion, "readiness-v2");
+  assert.equal(report.ruleVersion, "readiness-v3");
   assert.equal(report.route.dailyDistanceKm, 105.4);
   assert.equal(report.factors.some((factor) => factor.id === "consecutive_days"), false);
   assert.equal(report.comparableActivities[0].name, "Century prep");
@@ -124,7 +124,50 @@ test("stage-aware readiness surfaces a hard day instead of averaging it away", (
   assert.equal(report.unknowns.some((item) => item.includes("equal route split")), false);
 });
 
-function activity(activity_id, name, start_date, distanceKm, ascentM, movingMinutes) {
+test("terrain relevance prefers demonstrated rides that match the planned bicycle context", () => {
+  const now = new Date("2026-08-13T12:00:00Z");
+  const roadHistory = Array.from({ length: 6 }, (_, index) => activity(index + 1, `Road ${index + 1}`, `2026-08-0${index + 1}T08:00:00Z`, 70, 700, 240));
+  const mountainHistory = roadHistory.map((item) => ({ ...item, sport_type: "MountainBikeRide" }));
+  const target = { id: "trail", name: "Trail route", days: 1, distanceKm: 65, ascentM: 1_000, estimatedMovingMinutes: 300, bicycleType: "Mountain", terrainProfile: "off_road" };
+
+  const roadReport = buildRouteReadinessReport(roadHistory, target, now);
+  const mountainReport = buildRouteReadinessReport(mountainHistory, target, now);
+
+  assert.ok(mountainReport.factors.find((factor) => factor.id === "terrain").score > roadReport.factors.find((factor) => factor.id === "terrain").score);
+  assert.equal(mountainReport.route.bicycleType, "Mountain");
+  assert.equal(mountainReport.route.terrainProfile, "off_road");
+});
+
+test("summarizes optional physiology drift without allowing it to invent a readiness score", () => {
+  const activities = [
+    activity(1, "Sensor one", "2026-08-10T08:00:00Z", 80, 800, 260, { stream_sample_count: 120, heart_rate_drift_pct: 4, power_fade_pct: 3, aerobic_decoupling_pct: 5 }),
+    activity(2, "Sensor two", "2026-08-03T08:00:00Z", 75, 750, 250, { stream_sample_count: 110, heart_rate_drift_pct: 6, power_fade_pct: 5, aerobic_decoupling_pct: 7 }),
+    activity(3, "Sensor three", "2026-07-27T08:00:00Z", 70, 700, 240, { stream_sample_count: 100, heart_rate_drift_pct: 8, power_fade_pct: 7, aerobic_decoupling_pct: 9 }),
+  ];
+  const report = buildRouteReadinessReport(activities, { id: "sensor-route", name: "Sensor route", days: 1, distanceKm: 70, ascentM: 700, estimatedMovingMinutes: 240, bicycleType: "Road", terrainProfile: "road" }, new Date("2026-08-13T12:00:00Z"));
+
+  assert.equal(report.physiology.analyzedActivities, 3);
+  assert.equal(report.physiology.medianHeartRateDriftPct, 6);
+  assert.equal(report.physiology.medianPowerFadePct, 5);
+  assert.equal(report.physiology.medianAerobicDecouplingPct, 7);
+  assert.equal(report.physiology.status, "stable");
+});
+
+test("builds a compact Copilot packet without identity, route traces, or raw streams", () => {
+  const report = buildRouteReadinessReport([
+    activity(1, "Private activity name", "2026-08-10T08:00:00Z", 60, 600, 210),
+    activity(2, "Another private name", "2026-08-03T08:00:00Z", 55, 550, 195),
+    activity(3, "Third private name", "2026-07-27T08:00:00Z", 50, 500, 180),
+  ], { id: "packet-route", name: "Packet route", days: 1, distanceKm: 60, ascentM: 600, estimatedMovingMinutes: 210 }, new Date("2026-08-13T12:00:00Z"));
+
+  assert.equal(report.copilotEvidence.schemaVersion, "copilot-readiness-evidence-v1");
+  assert.deepEqual(report.copilotEvidence.dataBoundary, { rawActivityStreamsIncluded: false, routeTraceIncluded: false, athleteIdentityIncluded: false });
+  assert.equal("name" in report.copilotEvidence.comparableEfforts[0], false);
+  assert.equal("activityId" in report.copilotEvidence.comparableEfforts[0], false);
+  assert.equal(JSON.stringify(report.copilotEvidence).includes("Private activity name"), false);
+});
+
+function activity(activity_id, name, start_date, distanceKm, ascentM, movingMinutes, insight = {}) {
   return {
     activity_id,
     name,
@@ -133,5 +176,6 @@ function activity(activity_id, name, start_date, distanceKm, ascentM, movingMinu
     distance_m: distanceKm * 1000,
     total_elevation_gain_m: ascentM,
     moving_time_s: movingMinutes * 60,
+    ...insight,
   };
 }

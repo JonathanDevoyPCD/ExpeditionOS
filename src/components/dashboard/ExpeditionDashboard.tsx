@@ -47,10 +47,11 @@ import { deleteAdventure, loadAdventures, replaceLocalAdventures, saveAdventure 
 import { cloudAdventureId, deleteCloudAdventure, loadCloudAdventures, saveCloudAdventure } from "@/lib/cloudAdventures";
 import { buildItinerary, buildItineraryGpx, findItineraryWarnings, formatClock, suggestRouteStops } from "@/lib/itinerary";
 import type { AnalysisResponse, RouteAnalysis } from "@/types/analysis";
-import type { AdventurePlan } from "@/types/adventure";
+import type { AdventurePlan, RouteAnchor } from "@/types/adventure";
 import type { ExpeditionProfile } from "@/types/profile";
 import { POI_CATEGORIES, type PoiCategory, type PoiDataset, type RoutePoi } from "@/types/poi";
 import type { RouteDataset, RoutePoint } from "@/types/route";
+import type { CopilotReadinessEvidencePacket } from "@/types/strava";
 
 const ExpeditionMap = dynamic(() => import("@/components/map/ExpeditionMap"), {
   ssr: false,
@@ -418,6 +419,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisPlaces, setAnalysisPlaces] = useState<RoutePoi[]>([]);
   const [analysisModel, setAnalysisModel] = useState<string | null>(null);
+  const [analysisRouteName, setAnalysisRouteName] = useState<string | null>(null);
   const [copilotQuestion, setCopilotQuestion] = useState("");
   const [adventures, setAdventures] = useState<AdventurePlan[]>([]);
   const [editingAdventure, setEditingAdventure] = useState<AdventurePlan | null>(null);
@@ -563,11 +565,13 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
     }
   }
 
-  async function requestAnalysis(question?: string) {
-    if (!route) return;
+  async function requestAnalysis(question?: string, readinessEvidence?: CopilotReadinessEvidencePacket, routeOverride?: RouteDataset, anchorsOverride?: RouteAnchor[]) {
+    const analysisRoute = routeOverride ?? route;
+    if (!analysisRoute) return;
     setAnalysisOpen(true);
     setAnalysisLoading(true);
     setAnalysisError(null);
+    setAnalysisRouteName(analysisRoute.name);
 
     try {
       const response = await fetch("/api/analyze", {
@@ -575,8 +579,9 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: question?.trim() || undefined,
-          route,
-          routeAnchors: adventures.find((adventure) => adventure.route.id === route.id)?.anchors ?? [],
+          route: analysisRoute,
+          routeAnchors: anchorsOverride ?? adventures.find((adventure) => adventure.route.id === analysisRoute.id)?.anchors ?? [],
+          readinessEvidence,
         }),
       });
       const result = (await response.json()) as Partial<AnalysisResponse> & { error?: string };
@@ -711,7 +716,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
           {activeNav === "Plan adventure" ? (
             <AdventureCreator initialAdventure={editingAdventure} onCancel={() => { setEditingAdventure(null); setActiveNav("Dashboard"); }} onSave={storeAdventure} />
           ) : activeNav === "Readiness" ? (
-            <ReadinessWorkspace profile={profile} adventures={adventures} activeRoute={route} />
+            <ReadinessWorkspace profile={profile} adventures={adventures} activeRoute={route} onAnalyzeEvidence={(packet, selectedRoute, anchors) => requestAnalysis("Explain the most important preparation gaps for this route using my deterministic readiness evidence. Keep the readiness score unchanged and distinguish measured evidence from advice.", packet, selectedRoute, anchors)} />
           ) : (
             <RouteLibrary adventures={adventures} syncStatus={cloudStatus} currentUserId={userId} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} onRefresh={refreshCloudRoutes} />
           )}
@@ -1110,7 +1115,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
           </footer>
         </div>
       </main>
-      {analysisOpen && <AnalysisDrawer routeName={route.name} analysis={analysis} places={analysisPlaces} model={analysisModel} error={analysisError} loading={analysisLoading} onClose={() => setAnalysisOpen(false)} />}
+      {analysisOpen && <AnalysisDrawer routeName={analysisRouteName ?? route.name} analysis={analysis} places={analysisPlaces} model={analysisModel} error={analysisError} loading={analysisLoading} onClose={() => setAnalysisOpen(false)} />}
     </div>
   );
 }

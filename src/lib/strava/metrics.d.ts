@@ -1,6 +1,6 @@
 import type { RouteReadinessReport, RouteReadinessTarget, StravaMetricActivity, StravaReadinessSummary, StravaSummaryMetricActivity } from "@/types/strava";
 
-export const READINESS_RULE_VERSION: "readiness-v2";
+export const READINESS_RULE_VERSION: "readiness-v3";
 
 export function buildStravaReadinessSummary(
   activities: StravaSummaryMetricActivity[],

@@ -46,7 +46,7 @@ Redeploy Vercel after adding or changing environment variables.
 
 ExpeditionOS requests `read` and `activity:read_all`. The latter is needed to include private activities in a complete personal readiness history. A rider can refuse the permission, but ExpeditionOS will not create an incomplete connection while presenting it as complete.
 
-The initial sync reads up to the latest year of activities in at most five 200-item pages, keeps cycling activity types, and stores compact summaries rather than full streams. The app records Strava's read-rate-limit headers and refreshes access tokens when they have one hour or less remaining. Every returned refresh token replaces the previous one.
+The initial sync reads up to the latest year of activities in at most five 200-item pages, keeps cycling activity types, and stores compact summaries. It may inspect up to six recent sensor-equipped rides for heart-rate and power drift while preserving headroom under Strava's reported rate limits. Only derived sample counts, heart-rate drift, power fade and aerobic decoupling are stored; raw streams are discarded immediately. The app refreshes access tokens when they have one hour or less remaining, and every returned refresh token replaces the previous one.
 
 ## 4. Current limits and next increment
 
@@ -65,6 +65,10 @@ The command uses `SITE_URL` to register `${SITE_URL}/api/strava/webhook`. Strava
 After registration, copy the returned value into `STRAVA_WEBHOOK_SUBSCRIPTION_ID` locally and in Vercel, then redeploy once more. ExpeditionOS rejects POST events from any other subscription ID.
 
 Activity create and update events fetch the current Strava activity and upsert only recognized cycling activity types. Delete events remove the matching private summary. Athlete deauthorization removes the connection and all imported activity summaries. Webhook work runs after the `200` acknowledgement so Strava receives its required prompt response; failures are recorded on the connection and remain recoverable through manual sync.
+
+## Readiness privacy boundary
+
+Readiness v3 compares route stages with private activity summaries, adds sport-type relevance for the saved bicycle setup, and presents optional physiology drift separately from the deterministic score. The Copilot evidence packet excludes athlete identity, activity names and identifiers, route coordinates and raw streams. It is planning evidence, not a medical assessment.
 
 Official references:
 

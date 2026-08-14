@@ -32,7 +32,7 @@ The first working slice includes:
 - Trip collaboration with owner, editor and viewer roles, in-app invitations and member removal.
 - Explicit per-trip emergency-profile sharing; contact details and travel documents remain owner-only.
 - Row-level security on every exposed table, validated with a rolled-back two-user isolation test.
-- A server-only Strava OAuth foundation with encrypted rotating tokens, owner-isolated cycling summaries, manual sync, automatic webhook updates and a private readiness workspace.
+- A server-only Strava integration with encrypted rotating tokens, owner-isolated cycling summaries, manual sync, automatic webhook updates, rate-aware sensor-stream summaries and private readiness-v3 terrain/Copilot evidence.
 - Public Privacy and Terms pages, a JSON account export, and authenticated self-service account deletion.
 - A no-cache `/api/health` endpoint for hosted deployment checks.
 
