@@ -742,7 +742,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
           ) : activeNav === "Readiness" ? (
             <ReadinessWorkspace profile={profile} adventures={adventures} activeRoute={route} onAnalyzeEvidence={(packet, selectedRoute, anchors) => requestAnalysis("Explain the most important preparation gaps for this route using my deterministic readiness evidence. Keep the readiness score unchanged and distinguish measured evidence from advice.", packet, selectedRoute, anchors)} />
           ) : logisticsWorkspace ? (
-            <PhaseBWorkspace name={logisticsWorkspace} adventure={activeAdventure} pois={poiDataset?.items ?? []} />
+            <PhaseBWorkspace key={`${logisticsWorkspace}:${activeAdventure?.id ?? "unsaved"}`} name={logisticsWorkspace} adventure={activeAdventure} pois={poiDataset?.items ?? []} userId={userId} canEdit={Boolean(activeAdventure) && canEditActiveRoute} />
           ) : (
             <RouteLibrary adventures={adventures} syncStatus={cloudStatus} currentUserId={userId} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} onRefresh={refreshCloudRoutes} />
           )}

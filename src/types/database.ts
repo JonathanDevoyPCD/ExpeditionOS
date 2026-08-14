@@ -117,6 +117,117 @@ export type Database = {
           },
         ]
       }
+      adventure_stays: {
+        Row: {
+          accommodation_type: string
+          address: string | null
+          adults: number
+          adventure_id: string
+          booking_reference: string | null
+          check_in: string | null
+          check_out: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          created_by: string
+          currency: string
+          distance_from_route_km: number | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          nightly_price: number | null
+          notes: string | null
+          placement: string
+          rating: number | null
+          reservation_status: string
+          rooms: number
+          source: string
+          source_reference: string | null
+          source_url: string | null
+          stage_day: number | null
+          total_price: number | null
+          updated_at: string
+        }
+        Insert: {
+          accommodation_type?: string
+          address?: string | null
+          adults?: number
+          adventure_id: string
+          booking_reference?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          created_by: string
+          currency?: string
+          distance_from_route_km?: number | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          nightly_price?: number | null
+          notes?: string | null
+          placement?: string
+          rating?: number | null
+          reservation_status?: string
+          rooms?: number
+          source?: string
+          source_reference?: string | null
+          source_url?: string | null
+          stage_day?: number | null
+          total_price?: number | null
+          updated_at?: string
+        }
+        Update: {
+          accommodation_type?: string
+          address?: string | null
+          adults?: number
+          adventure_id?: string
+          booking_reference?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          distance_from_route_km?: number | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          nightly_price?: number | null
+          notes?: string | null
+          placement?: string
+          rating?: number | null
+          reservation_status?: string
+          rooms?: number
+          source?: string
+          source_reference?: string | null
+          source_url?: string | null
+          stage_day?: number | null
+          total_price?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adventure_stays_adventure_id_fkey"
+            columns: ["adventure_id"]
+            isOneToOne: false
+            referencedRelation: "adventures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adventure_stays_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adventures: {
         Row: {
           anchors: Json
