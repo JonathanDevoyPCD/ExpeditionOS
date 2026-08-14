@@ -11,6 +11,7 @@ export async function exportAccountData(userId: string) {
     supabase.from("adventures").select("*"),
     supabase.from("adventure_members").select("*"),
     supabase.from("adventure_invitations").select("*"),
+    supabase.from("adventure_stays").select("*"),
     supabase.from("strava_activities").select("*").eq("user_id", userId),
   ]);
   const error = results.find((result) => result.error)?.error;
@@ -33,7 +34,8 @@ export async function exportAccountData(userId: string) {
     routes: (results[4].data ?? []).filter((route) => route.owner_id === userId || membershipRouteIds.has(route.id)),
     tripMemberships: results[5].data ?? [],
     tripInvitations: results[6].data ?? [],
-    stravaActivities: results[7].data ?? [],
+    tripStays: results[7].data ?? [],
+    stravaActivities: results[8].data ?? [],
   };
 }
 

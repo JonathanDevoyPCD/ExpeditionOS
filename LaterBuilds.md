@@ -70,7 +70,7 @@ Static lodging locations can be shown now through OpenStreetMap. Live room price
 
 Booking.com Demand API access requires affiliate approval and credentials. Until then, ExpeditionOS may open a normal destination search page, but it must not claim that a room, price or review score is current.
 
-The future Stays workspace should accept arrival/departure dates, traveller and room counts, accommodation types and a search area. It should compare total and per-person prices for backpackers/hostels, guest houses, B&Bs, self-catering and camping, then let the planner attach the selected stay to a trip stage. Live availability and pricing remain blocked on provider approval; manually saved candidates and outbound provider searches can be built first.
+The Stays workspace now accepts arrival/departure dates, traveller and room counts, accommodation types and a search area. It compares saved total and per-person price notes for backpackers/hostels, guest houses, B&Bs, self-catering and camping, and attaches selected or backup stays to a trip stage. Live availability, provider-supplied pricing and cheapest-inventory claims remain blocked on provider approval; manual and mapped candidates plus outbound provider searches are implemented first.
 
 The future Funds workspace should track estimated and actual trip costs for stays, food, groceries, transport, fuel, permits, repairs, activities and an emergency buffer. It should calculate trip/day/person totals, assign payers and participants, share budgets with trip members and reconcile paid versus owed amounts. The first version is budgeting and cost sharing only; receiving or transferring money requires a separate payment-provider and regulatory decision.
 

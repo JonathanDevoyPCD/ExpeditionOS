@@ -132,6 +132,7 @@ The dashboard is the command centre for the selected trip. Sidebar workspaces ar
 
 ### Stays workspace
 
+- **First increment implemented:** member-private stay candidates, dated occupancy context, mapped/manual additions, total and per-person price notes, shortlist sorting, selected/backup placement, reservation progress and private booking details are now represented in the shared trip model.
 - Search around a stage end, selected map area or manually entered destination.
 - Require arrival date, departure date, number of adults and number of rooms before requesting live availability.
 - Filter by backpackers/hostels, guest houses, bed and breakfasts, self-catering, camping and other practical cycling accommodation.

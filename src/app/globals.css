@@ -38,6 +38,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -75,6 +76,28 @@ button {
 .soft-panel {
   border: 1px solid rgba(208, 214, 214, 0.08);
   background: rgba(4, 38, 48, 0.62);
+}
+
+.stay-input {
+  height: 2.5rem;
+  border: 1px solid rgba(208, 214, 214, 0.08);
+  border-radius: 0.75rem;
+  background: rgba(4, 20, 33, 0.56);
+  padding: 0 0.75rem;
+  color: #ffffff;
+  font-size: 0.7rem;
+  outline: none;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.stay-input:focus {
+  border-color: rgba(134, 185, 176, 0.4);
+  background: rgba(4, 20, 33, 0.78);
+}
+
+.stay-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .map-shell .maplibregl-ctrl-group {
