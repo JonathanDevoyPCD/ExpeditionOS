@@ -124,12 +124,14 @@ export type Database = {
           created_at: string
           days: number
           description: string
+          departure_time: string
           id: string
           name: string
           owner_id: string
           preferences: Json | null
           route: Json
           source: string
+          starts_on: string | null
           updated_at: string
           visibility: string
         }
@@ -139,12 +141,14 @@ export type Database = {
           created_at?: string
           days?: number
           description?: string
+          departure_time?: string
           id: string
           name: string
           owner_id: string
           preferences?: Json | null
           route: Json
           source: string
+          starts_on?: string | null
           updated_at?: string
           visibility?: string
         }
@@ -154,12 +158,14 @@ export type Database = {
           created_at?: string
           days?: number
           description?: string
+          departure_time?: string
           id?: string
           name?: string
           owner_id?: string
           preferences?: Json | null
           route?: Json
           source?: string
+          starts_on?: string | null
           updated_at?: string
           visibility?: string
         }

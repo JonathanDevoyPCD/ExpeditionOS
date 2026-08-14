@@ -63,6 +63,8 @@ export type AdventurePlan = {
   createdAt: string;
   updatedAt: string;
   days: number;
+  startsOn?: string;
+  departureTime?: string;
   route: RouteDataset;
   anchors: RouteAnchor[];
   blueprint?: CopilotBlueprint;
