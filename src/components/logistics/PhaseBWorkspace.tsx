@@ -1,19 +1,12 @@
 "use client";
 
-import { Backpack, Bike, CircleDollarSign, CircleGauge, PackageCheck, TentTree, Users } from "lucide-react";
+import { Bike, CircleDollarSign, CircleGauge, TentTree, Users } from "lucide-react";
+import GearWorkspace from "@/components/logistics/GearWorkspace";
 import StaysWorkspace from "@/components/logistics/StaysWorkspace";
 import type { AdventurePlan } from "@/types/adventure";
 import type { RoutePoi } from "@/types/poi";
 
 export type LogisticsWorkspaceName = "Stays" | "Gear" | "Funds";
-
-const gearGroups = [
-  ["Bike and repairs", "Pump, tubes, tools and drivetrain spares"],
-  ["Sleep system", "Shelter, sleeping bag and insulation"],
-  ["Navigation and power", "Primary navigation, backup and charging"],
-  ["Food and water", "Carrying capacity, treatment and cooking"],
-  ["Safety and medical", "First aid, visibility and emergency equipment"],
-];
 
 const fundGroups = ["Accommodation", "Food and groceries", "Transport and fuel", "Permits and activities", "Repairs", "Emergency buffer"];
 
@@ -22,14 +15,10 @@ export default function PhaseBWorkspace({ name, adventure, pois, userId, canEdit
 
   return (
     <div className="mx-auto max-w-[1500px] p-4 sm:p-6 xl:p-8">
-      <section className="rise-in flex flex-col gap-4 sm:flex-row sm:items-end"><div className="mr-auto"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#86b9b0]/55">Phase B workspace</p><div className="mt-2 flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-[#86b9b0]/12 text-[#86b9b0]"><Icon className="size-5" /></span><div><h2 className="text-2xl font-semibold tracking-[-0.035em] text-white">{name}</h2><p className="mt-1 text-xs text-[#d0d6d6]/42">{adventure?.name ?? "Select a saved route to begin planning."}</p></div></div></div><span className="rounded-full border border-[#86b9b0]/15 bg-[#86b9b0]/[0.06] px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#86b9b0]">Foundation active</span></section>
-      {name === "Stays" ? <StaysWorkspace adventure={adventure} pois={pois} userId={userId} canEdit={canEdit} /> : name === "Gear" ? <GearFoundation adventure={adventure} /> : <FundsFoundation adventure={adventure} />}
+      <section className="rise-in flex flex-col gap-4 sm:flex-row sm:items-end"><div className="mr-auto"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#86b9b0]/55">Phase B workspace</p><div className="mt-2 flex items-center gap-3"><span className="grid size-11 place-items-center rounded-2xl bg-[#86b9b0]/12 text-[#86b9b0]"><Icon className="size-5" /></span><div><h2 className="text-2xl font-semibold tracking-[-0.035em] text-white">{name}</h2><p className="mt-1 text-xs text-[#d0d6d6]/42">{adventure?.name ?? "Select a saved route to begin planning."}</p></div></div></div><span className="rounded-full border border-[#86b9b0]/15 bg-[#86b9b0]/[0.06] px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#86b9b0]">{name === "Funds" ? "Foundation active" : "Shared workspace active"}</span></section>
+      {name === "Stays" ? <StaysWorkspace adventure={adventure} pois={pois} userId={userId} canEdit={canEdit} /> : name === "Gear" ? <GearWorkspace adventure={adventure} userId={userId} canEdit={canEdit} /> : <FundsFoundation adventure={adventure} />}
     </div>
   );
-}
-
-function GearFoundation({ adventure }: { adventure?: AdventurePlan }) {
-  return <div className="mt-7 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">{gearGroups.map(([title, description], index) => <article key={title} className="glass-panel rounded-[22px] p-5"><div className="flex items-center justify-between"><span className="grid size-9 place-items-center rounded-xl bg-[#86b9b0]/10 text-[#86b9b0]">{index === 0 ? <Bike className="size-4" /> : index === 1 ? <Backpack className="size-4" /> : <PackageCheck className="size-4" />}</span><span className="text-[9px] font-bold uppercase tracking-wider text-[#d0d6d6]/28">0 packed</span></div><h3 className="mt-5 text-sm font-semibold text-white">{title}</h3><p className="mt-2 text-[10px] leading-5 text-[#d0d6d6]/40">{description}</p><button disabled={!adventure} className="mt-5 w-full rounded-xl border border-white/[0.08] py-2.5 text-[10px] font-semibold text-[#86b9b0] disabled:opacity-35">Add first item</button></article>)}</div>;
 }
 
 function FundsFoundation({ adventure }: { adventure?: AdventurePlan }) {
