@@ -21,15 +21,15 @@ import {
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { buildRouteStages } from "@/lib/routeStages";
 import { disconnectStravaAccount, loadRouteReadiness, loadStravaStatus, startStravaConnection, syncStravaNow } from "@/lib/strava/client";
-import type { AdventurePlan, CopilotBlueprint, RouteAnchor } from "@/types/adventure";
+import type { AdventurePlan, CopilotBlueprint, RouteAnchor, RoutePreferences } from "@/types/adventure";
 import type { ExpeditionProfile } from "@/types/profile";
 import type { RouteDataset } from "@/types/route";
-import type { RouteReadinessFactor, RouteReadinessReport, RouteReadinessTarget, StravaConnectionStatus } from "@/types/strava";
+import type { CopilotReadinessEvidencePacket, RouteReadinessFactor, RouteReadinessReport, RouteReadinessTarget, StravaConnectionStatus } from "@/types/strava";
 
 type Icon = ComponentType<{ className?: string }>;
-type RouteOption = { key: string; route: RouteDataset; days: number; source: string; anchors: RouteAnchor[]; blueprint: CopilotBlueprint | null };
+type RouteOption = { key: string; route: RouteDataset; days: number; source: string; anchors: RouteAnchor[]; blueprint: CopilotBlueprint | null; bicycleType?: RoutePreferences["bicycleType"] };
 
-export default function ReadinessWorkspace({ profile, adventures, activeRoute }: { profile: ExpeditionProfile; adventures: AdventurePlan[]; activeRoute: RouteDataset }) {
+export default function ReadinessWorkspace({ profile, adventures, activeRoute, onAnalyzeEvidence }: { profile: ExpeditionProfile; adventures: AdventurePlan[]; activeRoute: RouteDataset; onAnalyzeEvidence: (packet: CopilotReadinessEvidencePacket, route: RouteDataset, anchors: RouteAnchor[]) => void }) {
   const [status, setStatus] = useState<StravaConnectionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<"connect" | "sync" | "disconnect" | null>(null);
@@ -39,7 +39,7 @@ export default function ReadinessWorkspace({ profile, adventures, activeRoute }:
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
   const routeOptions = useMemo<RouteOption[]>(() => {
-    const saved: RouteOption[] = adventures.map((adventure) => ({ key: adventure.id, route: adventure.route, days: adventure.days, source: adventure.source, anchors: adventure.anchors, blueprint: adventure.blueprint ?? null }));
+    const saved: RouteOption[] = adventures.map((adventure) => ({ key: adventure.id, route: adventure.route, days: adventure.days, source: adventure.source, anchors: adventure.anchors, blueprint: adventure.blueprint ?? null, bicycleType: adventure.preferences?.bicycleType }));
     if (!saved.some((option) => option.route.id === activeRoute.id)) saved.unshift({ key: `active:${activeRoute.id}`, route: activeRoute, days: 1, source: "active route", anchors: [], blueprint: null });
     return saved;
   }, [activeRoute, adventures]);
@@ -85,6 +85,9 @@ export default function ReadinessWorkspace({ profile, adventures, activeRoute }:
       distanceKm: selectedOption.route.metrics.distanceKm,
       ascentM: selectedOption.route.metrics.ascentM,
       estimatedMovingMinutes: selectedOption.route.metrics.estimatedMovingMinutes,
+      maxGradePct: Math.max(0, selectedOption.route.metrics.maxGradePct),
+      bicycleType: selectedOption.bicycleType,
+      terrainProfile: terrainProfileFor(selectedOption.bicycleType),
       stages: stagePlan.stages,
       stageSource: stagePlan.source,
     };
@@ -145,14 +148,15 @@ export default function ReadinessWorkspace({ profile, adventures, activeRoute }:
       {(message || error) && <div className={`mt-6 flex items-start gap-3 rounded-2xl border px-4 py-3 text-xs leading-5 ${error ? "border-rose-300/15 bg-rose-300/[0.07] text-rose-100/78" : "border-[#86b9b0]/15 bg-[#86b9b0]/[0.06] text-[#b8ddd6]"}`}>{error ? <AlertTriangle className="mt-0.5 size-4 shrink-0" /> : <CheckCircle2 className="mt-0.5 size-4 shrink-0" />}{error ?? message}</div>}
 
       {!status?.configured ? <ConfigurationCard /> : !status.connected ? <ConnectCard loading={action === "connect"} onConnect={connect} /> : (
-        <ConnectedReadiness status={status} action={action} onDisconnect={disconnect} routeOptions={routeOptions} selectedKey={selectedOption?.key ?? ""} onSelect={setSelectedKey} report={report} reportLoading={reportLoading} reportError={reportError} />
+        <ConnectedReadiness status={status} action={action} onDisconnect={disconnect} routeOptions={routeOptions} selectedKey={selectedOption?.key ?? ""} onSelect={setSelectedKey} report={report} reportLoading={reportLoading} reportError={reportError} onAnalyzeEvidence={onAnalyzeEvidence} />
       )}
     </div>
   );
 }
 
-function ConnectedReadiness({ status, action, onDisconnect, routeOptions, selectedKey, onSelect, report, reportLoading, reportError }: { status: StravaConnectionStatus; action: string | null; onDisconnect: () => void; routeOptions: RouteOption[]; selectedKey: string; onSelect: (key: string) => void; report: RouteReadinessReport | null; reportLoading: boolean; reportError: string | null }) {
+function ConnectedReadiness({ status, action, onDisconnect, routeOptions, selectedKey, onSelect, report, reportLoading, reportError, onAnalyzeEvidence }: { status: StravaConnectionStatus; action: string | null; onDisconnect: () => void; routeOptions: RouteOption[]; selectedKey: string; onSelect: (key: string) => void; report: RouteReadinessReport | null; reportLoading: boolean; reportError: string | null; onAnalyzeEvidence: (packet: CopilotReadinessEvidencePacket, route: RouteDataset, anchors: RouteAnchor[]) => void }) {
   const readiness = status.readiness;
+  const selectedRoute = routeOptions.find((option) => option.key === selectedKey);
   return <>
     <section className="glass-panel mt-7 flex flex-col gap-5 rounded-[24px] p-5 sm:flex-row sm:items-center sm:p-6">
       <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#fc4c02] text-sm font-black text-white">S</span>
@@ -173,7 +177,7 @@ function ConnectedReadiness({ status, action, onDisconnect, routeOptions, select
         <label className="block min-w-0 lg:w-[430px]"><span className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#86b9b0]/55">Route to assess</span><select value={selectedKey} onChange={(event) => onSelect(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/[0.08] bg-[#041421] px-3 text-xs font-semibold text-white outline-none transition focus:border-[#86b9b0]/45">{routeOptions.map((option) => <option key={option.key} value={option.key}>{option.route.name} · {option.days} day{option.days === 1 ? "" : "s"}</option>)}</select></label>
       </div>
 
-      {reportLoading ? <div className="grid min-h-64 place-items-center"><div className="text-center"><LoaderCircle className="mx-auto size-6 animate-spin text-[#86b9b0]" /><p className="mt-3 text-xs text-[#d0d6d6]/42">Comparing this route with your riding history…</p></div></div> : reportError ? <div className="mt-5 flex gap-3 rounded-2xl border border-rose-200/15 bg-rose-200/[0.06] p-4 text-xs text-rose-100/75"><AlertTriangle className="size-4 shrink-0" />{reportError}</div> : report ? <ReadinessReportView report={report} /> : null}
+      {reportLoading ? <div className="grid min-h-64 place-items-center"><div className="text-center"><LoaderCircle className="mx-auto size-6 animate-spin text-[#86b9b0]" /><p className="mt-3 text-xs text-[#d0d6d6]/42">Comparing this route with your riding history…</p></div></div> : reportError ? <div className="mt-5 flex gap-3 rounded-2xl border border-rose-200/15 bg-rose-200/[0.06] p-4 text-xs text-rose-100/75"><AlertTriangle className="size-4 shrink-0" />{reportError}</div> : report ? <ReadinessReportView report={report} selectedRoute={selectedRoute} onAnalyzeEvidence={onAnalyzeEvidence} /> : null}
     </section>
 
     <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_360px]">
@@ -183,17 +187,22 @@ function ConnectedReadiness({ status, action, onDisconnect, routeOptions, select
   </>;
 }
 
-function ReadinessReportView({ report }: { report: RouteReadinessReport }) {
+function ReadinessReportView({ report, selectedRoute, onAnalyzeEvidence }: { report: RouteReadinessReport; selectedRoute?: RouteOption; onAnalyzeEvidence: (packet: CopilotReadinessEvidencePacket, route: RouteDataset, anchors: RouteAnchor[]) => void }) {
   const verdictTone = report.verdict === "viable" ? "text-[#b8ddd6]" : report.verdict === "viable_with_changes" ? "text-amber-100" : "text-rose-100";
   return <div className="mt-6">
     <div className="grid gap-4 xl:grid-cols-[260px_1fr]">
       <article className="rounded-[22px] border border-[#86b9b0]/15 bg-[#86b9b0]/[0.06] p-6"><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#86b9b0]/58">Overall readiness</p><div className="mt-5 flex items-end gap-2"><span className={`text-6xl font-semibold tracking-[-0.07em] ${verdictTone}`}>{report.overallScore}</span><span className="pb-2 text-sm text-[#d0d6d6]/38">/ 100</span></div><p className={`mt-4 text-sm font-semibold ${verdictTone}`}>{report.verdictLabel}</p><p className="mt-2 text-[10px] leading-5 text-[#d0d6d6]/40">{report.confidence.level} confidence · {report.confidence.summary}</p></article>
-      <div className="grid gap-3 sm:grid-cols-3"><TargetMetric icon={RouteIcon} label="Hardest day" value={`Day ${report.route.hardestStage.day} · ${report.route.hardestStage.distanceKm} km`} note={`${report.route.days} riding day${report.route.days === 1 ? "" : "s"}`} /><TargetMetric icon={Mountain} label="Hardest-day climbing" value={`${report.route.hardestStage.ascentM.toLocaleString()} m`} note={`${report.route.hardestStage.descentM.toLocaleString()} m descent`} /><TargetMetric icon={Clock3} label="Hardest-day time" value={formatMinutes(report.route.hardestStage.estimatedMovingMinutes)} note="Estimated moving time" /></div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><TargetMetric icon={RouteIcon} label="Hardest day" value={`Day ${report.route.hardestStage.day} · ${report.route.hardestStage.distanceKm} km`} note={`${report.route.days} riding day${report.route.days === 1 ? "" : "s"}`} /><TargetMetric icon={Mountain} label="Hardest-day climbing" value={`${report.route.hardestStage.ascentM.toLocaleString()} m`} note={`${report.route.hardestStage.descentM.toLocaleString()} m descent`} /><TargetMetric icon={Clock3} label="Hardest-day time" value={formatMinutes(report.route.hardestStage.estimatedMovingMinutes)} note="Estimated moving time" /><TargetMetric icon={Bike} label="Bicycle context" value={report.route.bicycleType} note={report.route.terrainProfile === "unknown" ? "Surface not verified" : `${report.route.terrainProfile.replace("_", "-")} surface`} /></div>
     </div>
 
     {report.route.days > 1 && <article className="mt-4 rounded-[22px] border border-white/[0.07] bg-[#041421]/35 p-5"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h4 className="text-sm font-semibold text-white">Stage load</h4><p className="mt-1 text-[10px] text-[#d0d6d6]/38">The readiness score tests the demanding days rather than hiding them inside a trip average.</p></div><span className="w-fit rounded-full border border-[#86b9b0]/15 bg-[#86b9b0]/[0.06] px-3 py-1.5 text-[8px] font-bold uppercase tracking-[0.12em] text-[#86b9b0]/70">{stageSourceLabel(report.route.stageSource)}</span></div><div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{report.route.stages.map((stage) => { const hardest = stage.day === report.route.hardestStage.day; return <div key={stage.day} className={`rounded-xl border p-3 ${hardest ? "border-[#86b9b0]/30 bg-[#86b9b0]/[0.08]" : "border-white/[0.06] bg-[#042630]/38"}`}><div className="flex items-center justify-between"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-[#86b9b0]">Day {stage.day}</p>{hardest && <span className="text-[8px] font-bold uppercase tracking-[0.1em] text-[#b8ddd6]">Hardest</span>}</div><p className="mt-2 text-sm font-semibold text-white">{stage.distanceKm} km</p><p className="mt-1 text-[9px] leading-4 text-[#d0d6d6]/38">{stage.ascentM.toLocaleString()} m up · {formatMinutes(stage.estimatedMovingMinutes)}</p></div>; })}</div></article>}
 
     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{report.factors.map((factor) => <FactorCard key={factor.id} factor={factor} critical={factor.id === report.criticalFactorId} />)}</div>
+
+    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+      <PhysiologyCard report={report} />
+      <CopilotEvidenceCard report={report} onAnalyze={selectedRoute ? () => onAnalyzeEvidence(report.copilotEvidence, selectedRoute.route, selectedRoute.anchors) : undefined} />
+    </div>
 
     <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_0.8fr]">
       <article className="rounded-[22px] border border-white/[0.07] bg-[#041421]/35 p-5"><div className="flex items-center gap-2"><Sparkles className="size-4 text-[#86b9b0]" /><h4 className="text-sm font-semibold text-white">Closest completed rides</h4></div>{report.comparableActivities.length ? <div className="mt-4 space-y-2">{report.comparableActivities.map((activity) => <div key={activity.activityId} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-[#042630]/48 p-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#86b9b0]/10 text-[10px] font-bold text-[#86b9b0]">{activity.similarityScore}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-white">{activity.name}</p><p className="mt-1 text-[9px] text-[#d0d6d6]/38">{formatDate(activity.startDate)} · {activity.distanceKm} km · {activity.ascentM.toLocaleString()} m · {formatMinutes(activity.movingMinutes)}</p></div><ChevronRight className="size-4 text-[#d0d6d6]/20" /></div>)}</div> : <p className="mt-4 text-[11px] text-[#d0d6d6]/38">Sync at least one cycling activity to find comparable rides.</p>}</article>
@@ -206,6 +215,20 @@ function FactorCard({ factor, critical }: { factor: RouteReadinessFactor; critic
   const tone = factor.status === "strong" ? "bg-[#86b9b0]" : factor.status === "watch" ? "bg-amber-200" : "bg-rose-300";
   return <article className={`rounded-2xl border p-4 ${critical ? "border-rose-200/20 bg-rose-200/[0.04]" : "border-white/[0.07] bg-[#041421]/35"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#d0d6d6]/45">{factor.label}</p>{critical && <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.14em] text-rose-100/65">Largest gap</p>}</div><span className="text-xl font-semibold text-white">{factor.score}</span></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className={`h-full rounded-full ${tone}`} style={{ width: `${factor.score}%` }} /></div><p className="mt-4 text-[10px] leading-5 text-[#d0d6d6]/48">{factor.summary}</p><p className="mt-2 text-[9px] leading-4 text-[#d0d6d6]/30">{factor.evidence.join(" · ")}</p></article>;
 }
+
+function PhysiologyCard({ report }: { report: RouteReadinessReport }) {
+  const evidence = report.physiology;
+  const tone = evidence.status === "stable" ? "text-[#b8ddd6]" : evidence.status === "watch" ? "text-amber-100" : "text-[#d0d6d6]/48";
+  return <article className="rounded-[22px] border border-white/[0.07] bg-[#041421]/35 p-5"><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><Activity className="size-4 text-[#86b9b0]" /><h4 className="text-sm font-semibold text-white">Heart-rate and power drift</h4></div><p className="mt-2 text-[10px] leading-5 text-[#d0d6d6]/38">Optional derived evidence; raw Strava streams are never stored.</p></div><span className={`text-[9px] font-bold uppercase tracking-[0.12em] ${tone}`}>{evidence.status}</span></div><p className="mt-4 text-[11px] leading-5 text-[#d0d6d6]/55">{evidence.summary}</p><div className="mt-4 grid grid-cols-3 gap-2"><DriftMetric label="HR drift" value={evidence.medianHeartRateDriftPct} /><DriftMetric label="Power fade" value={evidence.medianPowerFadePct} /><DriftMetric label="Decoupling" value={evidence.medianAerobicDecouplingPct} /></div><p className="mt-4 text-[9px] leading-4 text-[#d0d6d6]/28">{evidence.analyzedActivities} stream-analyzed ride{evidence.analyzedActivities === 1 ? "" : "s"}. This evidence stays explanatory until enough calibrated history exists.</p></article>;
+}
+
+function CopilotEvidenceCard({ report, onAnalyze }: { report: RouteReadinessReport; onAnalyze?: () => void }) {
+  const packet = report.copilotEvidence;
+  return <article className="rounded-[22px] border border-[#86b9b0]/14 bg-[#86b9b0]/[0.045] p-5"><div className="flex items-start justify-between gap-3"><div className="flex items-center gap-2"><Sparkles className="size-4 text-[#86b9b0]" /><h4 className="text-sm font-semibold text-white">Expedition Copilot evidence</h4></div><span className="rounded-full bg-[#86b9b0]/10 px-2.5 py-1 text-[8px] font-bold uppercase tracking-[0.12em] text-[#86b9b0]">Ready</span></div><p className="mt-4 text-[11px] leading-5 text-[#d0d6d6]/52">A compact deterministic packet gives Copilot the score, factors, comparable effort facts, physiology summary and explicit unknowns.</p><div className="mt-4 grid grid-cols-3 gap-2"><PacketMetric label="Factors" value={`${packet.factors.length}`} /><PacketMetric label="Comparables" value={`${packet.comparableEfforts.length}`} /><PacketMetric label="Unknowns" value={`${packet.unknowns.length}`} /></div><button type="button" onClick={onAnalyze} disabled={!onAnalyze} className="mt-4 w-full rounded-xl bg-[#86b9b0] px-4 py-2.5 text-[10px] font-bold text-[#041421] transition hover:bg-[#9ac9c0] disabled:cursor-not-allowed disabled:opacity-40">Ask Copilot about this evidence</button><p className="mt-4 border-t border-white/[0.06] pt-4 font-mono text-[9px] text-[#d0d6d6]/30">{packet.schemaVersion} · no identity, route trace or raw activity streams</p></article>;
+}
+
+function DriftMetric({ label, value }: { label: string; value: number | null }) { return <div className="rounded-xl border border-white/[0.06] bg-[#042630]/45 p-3"><p className="text-[8px] font-bold uppercase tracking-[0.1em] text-[#d0d6d6]/32">{label}</p><p className="mt-2 text-sm font-semibold text-white">{value === null ? "—" : `${value > 0 ? "+" : ""}${value}%`}</p></div>; }
+function PacketMetric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-white/[0.06] bg-[#041421]/30 p-3"><p className="text-[8px] font-bold uppercase tracking-[0.1em] text-[#d0d6d6]/32">{label}</p><p className="mt-2 text-sm font-semibold text-white">{value}</p></div>; }
 
 function ConnectCard({ loading, onConnect }: { loading: boolean; onConnect: () => void }) { return <section className="glass-panel rise-in mt-7 overflow-hidden rounded-[28px]"><div className="grid lg:grid-cols-[1.1fr_0.9fr]"><div className="p-7 sm:p-10"><span className="grid size-12 place-items-center rounded-2xl bg-[#fc4c02] text-white"><Activity className="size-6" /></span><h3 className="mt-6 text-2xl font-semibold tracking-[-0.035em] text-white">Bring your riding history into the plan</h3><p className="mt-3 max-w-xl text-sm leading-7 text-[#d0d6d6]/50">ExpeditionOS imports the latest year of cycling activities, then compares those facts privately with any saved route.</p><button onClick={onConnect} disabled={loading} className="mt-7 flex h-12 items-center gap-3 rounded-xl bg-[#fc4c02] px-6 text-xs font-bold text-white transition hover:bg-[#ff6422] disabled:opacity-55">{loading ? <LoaderCircle className="size-4 animate-spin" /> : <Link2 className="size-4" />}{loading ? "Opening Strava…" : "Connect with Strava"}</button></div><div className="border-t border-white/[0.07] bg-[#041421]/38 p-7 sm:p-10 lg:border-l lg:border-t-0"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#86b9b0]/62">What we import</p><div className="mt-5 space-y-4"><PrivacyItem icon={Bike} title="Cycling activities only" text="Ride, gravel, mountain-bike, e-bike and virtual cycling summaries." /><PrivacyItem icon={TrendingUp} title="Readiness facts" text="Distance, ascent, moving time and optional heart-rate or power summaries." /><PrivacyItem icon={ShieldCheck} title="Private by default" text="Tokens are encrypted server-side. Imported history belongs only to your account." /></div></div></div></section>; }
 
@@ -220,3 +243,4 @@ function formatDateTime(value: string) { return new Intl.DateTimeFormat(undefine
 function formatDate(value: string) { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value)); }
 function formatMinutes(minutes: number) { const hours = Math.floor(minutes / 60); const remainder = minutes % 60; return hours ? `${hours}h ${remainder}m` : `${remainder}m`; }
 function stageSourceLabel(source: RouteReadinessReport["route"]["stageSource"]) { return source === "overnight_anchors" ? "Confirmed overnight stages" : source === "copilot_targets" ? "Copilot target stages" : "Equal route split"; }
+function terrainProfileFor(bicycleType?: RoutePreferences["bicycleType"]): RouteReadinessTarget["terrainProfile"] { return bicycleType === "Road" ? "road" : bicycleType === "Mountain" ? "off_road" : bicycleType === "Hybrid" ? "mixed" : "unknown"; }

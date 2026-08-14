@@ -355,6 +355,7 @@ export type Database = {
           average_heartrate: number | null
           average_speed_mps: number | null
           average_watts: number | null
+          aerobic_decoupling_pct: number | null
           commute: boolean
           distance_m: number
           elapsed_time_s: number
@@ -370,6 +371,8 @@ export type Database = {
           sport_type: string
           start_date: string
           start_date_local: string | null
+          stream_analyzed_at: string | null
+          stream_sample_count: number
           suffer_score: number | null
           timezone: string | null
           total_elevation_gain_m: number
@@ -377,6 +380,8 @@ export type Database = {
           updated_at: string
           user_id: string
           weighted_average_watts: number | null
+          heart_rate_drift_pct: number | null
+          power_fade_pct: number | null
         }
         Insert: {
           achievement_count?: number
@@ -385,6 +390,7 @@ export type Database = {
           average_heartrate?: number | null
           average_speed_mps?: number | null
           average_watts?: number | null
+          aerobic_decoupling_pct?: number | null
           commute?: boolean
           distance_m?: number
           elapsed_time_s?: number
@@ -400,6 +406,8 @@ export type Database = {
           sport_type: string
           start_date: string
           start_date_local?: string | null
+          stream_analyzed_at?: string | null
+          stream_sample_count?: number
           suffer_score?: number | null
           timezone?: string | null
           total_elevation_gain_m?: number
@@ -407,6 +415,8 @@ export type Database = {
           updated_at?: string
           user_id: string
           weighted_average_watts?: number | null
+          heart_rate_drift_pct?: number | null
+          power_fade_pct?: number | null
         }
         Update: {
           achievement_count?: number
@@ -415,6 +425,7 @@ export type Database = {
           average_heartrate?: number | null
           average_speed_mps?: number | null
           average_watts?: number | null
+          aerobic_decoupling_pct?: number | null
           commute?: boolean
           distance_m?: number
           elapsed_time_s?: number
@@ -430,6 +441,8 @@ export type Database = {
           sport_type?: string
           start_date?: string
           start_date_local?: string | null
+          stream_analyzed_at?: string | null
+          stream_sample_count?: number
           suffer_score?: number | null
           timezone?: string | null
           total_elevation_gain_m?: number
@@ -437,6 +450,8 @@ export type Database = {
           updated_at?: string
           user_id?: string
           weighted_average_watts?: number | null
+          heart_rate_drift_pct?: number | null
+          power_fade_pct?: number | null
         }
         Relationships: []
       }

@@ -68,11 +68,11 @@ The future Funds workspace should track estimated and actual trip costs for stay
 
 ## Strava account synchronization
 
-**Foundation implemented:** ExpeditionOS now has server-side OAuth initiation and callback routes, encrypted token storage, automatic short-lived token refresh, one-year cycling-summary backfill, manual synchronization, rate-limit tracking, safe revocation, owner-only activity access and a Readiness workspace.
+**Phase A implemented:** ExpeditionOS now has server-side OAuth, encrypted rotating tokens, a one-year cycling-summary backfill, manual synchronization, automatic webhook updates, rate-limit tracking, safe revocation, owner-only activity access and deterministic route-specific readiness.
 
-**Activation still requires:** A registered Strava application plus `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` and `STRAVA_TOKEN_ENCRYPTION_KEY` in local and Vercel environments. The production authorization callback domain must be `expedition-os-mocha.vercel.app`.
+**Production active:** The Strava application, OAuth callback and single production webhook subscription are configured for `expedition-os-mocha.vercel.app`. Environment values remain private in Vercel and local development configuration.
 
-The next Strava increment is webhook-driven create, update, delete and deauthorization handling, followed by deterministic route-versus-history readiness scoring. New applications begin in single-player mode; expanded athlete capacity requires configuration or review through Strava.
+Readiness v3 adds saved bicycle/terrain relevance, optional heart-rate and power-drift summaries, and a privacy-minimised deterministic evidence packet for Expedition Copilot. Raw streams are processed transiently and are not stored. New applications still begin in single-player mode; expanded athlete capacity requires configuration or review through Strava.
 
 ## Account services still to add
 

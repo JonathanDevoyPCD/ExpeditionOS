@@ -97,6 +97,88 @@ function chooseModel(question: string) {
   return complex ? "gpt-5.6-terra" : "gpt-5.6-luna";
 }
 
+function sanitizeReadinessEvidence(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const packet = value as Record<string, unknown>;
+  if (packet.schemaVersion !== "copilot-readiness-evidence-v1" || packet.readinessRuleVersion !== "readiness-v3") return null;
+  const route = record(packet.route);
+  const assessment = record(packet.assessment);
+  const physiology = record(packet.physiology);
+  if (!route || !assessment || !physiology) return null;
+  const hardestStage = record(route.hardestStage);
+  if (!hardestStage) return null;
+  const factors = Array.isArray(packet.factors) ? packet.factors.slice(0, 8).flatMap((value) => {
+    const item = record(value);
+    if (!item) return [];
+    return [{
+      id: safeText(item.id, 40),
+      score: safeNumber(item.score, 0, 100),
+      status: safeText(item.status, 20),
+      summary: safeText(item.summary, 500),
+      evidence: safeStrings(item.evidence, 4, 300),
+    }];
+  }) : [];
+  const comparableEfforts = Array.isArray(packet.comparableEfforts) ? packet.comparableEfforts.slice(0, 3).flatMap((value) => {
+    const item = record(value);
+    if (!item) return [];
+    return [{
+      sportType: safeText(item.sportType, 40),
+      daysAgo: safeNumber(item.daysAgo, 0, 400),
+      distanceKm: safeNumber(item.distanceKm, 0, 20_000),
+      ascentM: safeNumber(item.ascentM, 0, 100_000),
+      movingMinutes: safeNumber(item.movingMinutes, 0, 20_000),
+      similarityScore: safeNumber(item.similarityScore, 0, 100),
+    }];
+  }) : [];
+  return {
+    schemaVersion: "copilot-readiness-evidence-v1",
+    readinessRuleVersion: "readiness-v3",
+    route: {
+      name: safeText(route.name, 200),
+      days: safeNumber(route.days, 1, 30),
+      distanceKm: safeNumber(route.distanceKm, 0.1, 20_000),
+      ascentM: safeNumber(route.ascentM, 0, 500_000),
+      bicycleType: safeText(route.bicycleType, 20),
+      terrainProfile: safeText(route.terrainProfile, 20),
+      hardestStage: {
+        day: safeNumber(hardestStage.day, 1, 30),
+        distanceKm: safeNumber(hardestStage.distanceKm, 0.1, 20_000),
+        ascentM: safeNumber(hardestStage.ascentM, 0, 100_000),
+        descentM: safeNumber(hardestStage.descentM, 0, 100_000),
+        estimatedMovingMinutes: safeNumber(hardestStage.estimatedMovingMinutes, 1, 20_000),
+      },
+    },
+    assessment: {
+      overallScore: safeNumber(assessment.overallScore, 0, 100),
+      verdict: safeText(assessment.verdict, 40),
+      confidence: safeText(assessment.confidence, 20),
+      criticalFactorId: safeText(assessment.criticalFactorId, 40),
+    },
+    factors,
+    comparableEfforts,
+    physiology: {
+      status: safeText(physiology.status, 20),
+      analyzedActivities: safeNumber(physiology.analyzedActivities, 0, 1_000),
+      heartRateActivities: safeNumber(physiology.heartRateActivities, 0, 1_000),
+      powerActivities: safeNumber(physiology.powerActivities, 0, 1_000),
+      pairedActivities: safeNumber(physiology.pairedActivities, 0, 1_000),
+      medianHeartRateDriftPct: nullableNumber(physiology.medianHeartRateDriftPct, -100, 300),
+      medianPowerFadePct: nullableNumber(physiology.medianPowerFadePct, -100, 300),
+      medianAerobicDecouplingPct: nullableNumber(physiology.medianAerobicDecouplingPct, -100, 300),
+      summary: safeText(physiology.summary, 500),
+      evidence: safeStrings(physiology.evidence, 4, 300),
+    },
+    unknowns: safeStrings(packet.unknowns, 10, 500),
+    dataBoundary: { rawActivityStreamsIncluded: false, routeTraceIncluded: false, athleteIdentityIncluded: false },
+  };
+}
+
+function record(value: unknown) { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null; }
+function safeText(value: unknown, maximum: number) { return typeof value === "string" ? value.trim().slice(0, maximum) : ""; }
+function safeNumber(value: unknown, minimum: number, maximum: number) { const parsed = Number(value); return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : minimum; }
+function nullableNumber(value: unknown, minimum: number, maximum: number) { return value === null || value === undefined ? null : safeNumber(value, minimum, maximum); }
+function safeStrings(value: unknown, maximumItems: number, maximumLength: number) { return Array.isArray(value) ? value.flatMap((item) => typeof item === "string" && item.trim() ? [item.trim().slice(0, maximumLength)] : []).slice(0, maximumItems) : []; }
+
 export async function POST(request: NextRequest) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: "OpenAI is not configured for this workspace." }, { status: 503 });
@@ -105,14 +187,16 @@ export async function POST(request: NextRequest) {
   let question = "Assess whether this cycling route is practical and explain how a rider should prepare.";
   let suppliedRoute: RouteDataset | null = null;
   let suppliedAnchors: RouteAnchor[] = [];
+  let readinessEvidence: ReturnType<typeof sanitizeReadinessEvidence> = null;
   try {
-    const body = (await request.json()) as { question?: unknown; route?: RouteDataset; routeAnchors?: RouteAnchor[] };
+    const body = (await request.json()) as { question?: unknown; route?: RouteDataset; routeAnchors?: RouteAnchor[]; readinessEvidence?: unknown };
     if (typeof body.question === "string" && body.question.trim()) question = body.question.trim().slice(0, 1200);
     const candidateRoute = body.route;
     if (candidateRoute?.points && candidateRoute.points.length >= 2 && candidateRoute.points.length <= 2000) {
       suppliedRoute = candidateRoute;
     }
     if (Array.isArray(body.routeAnchors)) suppliedAnchors = body.routeAnchors.slice(0, 12);
+    readinessEvidence = sanitizeReadinessEvidence(body.readinessEvidence);
   } catch {
     // The default route assessment does not require a request body.
   }
@@ -137,6 +221,7 @@ export async function POST(request: NextRequest) {
         "Do not invent surface conditions, weather, access permissions, rider fitness, prices, stock, or live road status.",
         "If relevant mapped candidates are absent, say so directly. Do not substitute invented businesses.",
         "When rider history is absent, state that readiness cannot yet be personalized and keep confidence appropriately limited.",
+        "When a deterministic readiness evidence packet is supplied, treat its scores and factors as authoritative inputs. Do not recalculate them, expose excluded private data, or turn physiology summaries into medical claims.",
         "Separate route feasibility from personal readiness. Be practical, concise, and specific.",
         "Flag extreme grades as possible GPS or elevation sampling artifacts when appropriate.",
         "For a simple place question, omit irrelevant training sections and generic risks. This is planning guidance, not a safety guarantee or medical advice.",
@@ -170,7 +255,8 @@ export async function POST(request: NextRequest) {
             listedOpeningHours: poi.openingHours ?? null,
           })),
         },
-        unavailableContext: ["rider training history", "surface type", "live weather", "road or trail access", "current business status", "prices and stock"],
+        riderReadinessEvidence: readinessEvidence,
+        unavailableContext: [...(readinessEvidence ? [] : ["rider training history"]), "live weather", "road or trail access", "current business status", "prices and stock"],
       }),
       text: {
         verbosity: "low",

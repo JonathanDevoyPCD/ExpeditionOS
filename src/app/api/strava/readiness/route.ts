@@ -36,7 +36,25 @@ function parseTarget(value: unknown): RouteReadinessTarget | null {
   if (body.stages !== undefined && !stages) return null;
   const stageSource = parseStageSource(body.stageSource);
   if (body.stageSource !== undefined && !stageSource) return null;
-  return { id, name, days, distanceKm, ascentM, estimatedMovingMinutes, ...(stages ? { stages } : {}), ...(stageSource ? { stageSource } : {}) };
+  const bicycleType = body.bicycleType === "Road" || body.bicycleType === "Hybrid" || body.bicycleType === "Mountain" ? body.bicycleType : null;
+  if (body.bicycleType !== undefined && !bicycleType) return null;
+  const terrainProfile = body.terrainProfile === "road" || body.terrainProfile === "mixed" || body.terrainProfile === "off_road" || body.terrainProfile === "unknown" ? body.terrainProfile : null;
+  if (body.terrainProfile !== undefined && !terrainProfile) return null;
+  const maxGradePct = body.maxGradePct === undefined ? null : Number(body.maxGradePct);
+  if (maxGradePct !== null && !finiteWithin(maxGradePct, 0, 100)) return null;
+  return {
+    id,
+    name,
+    days,
+    distanceKm,
+    ascentM,
+    estimatedMovingMinutes,
+    ...(maxGradePct !== null ? { maxGradePct } : {}),
+    ...(bicycleType ? { bicycleType } : {}),
+    ...(terrainProfile ? { terrainProfile } : {}),
+    ...(stages ? { stages } : {}),
+    ...(stageSource ? { stageSource } : {}),
+  };
 }
 
 function parseStages(value: unknown, days: number): RouteReadinessStageTarget[] | null {
