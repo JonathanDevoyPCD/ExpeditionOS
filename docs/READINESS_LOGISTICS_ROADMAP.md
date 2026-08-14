@@ -65,7 +65,7 @@ The product is not a generic hotel browser. Route boundaries, rider capability a
 - Rate-limit-aware stream enrichment that stops before Strava's short-term or daily read allowance is exhausted.
 - Versioned `readiness-v3` rules with deterministic terrain relevance, stage-aware scoring and private Copilot evidence.
 
-## Phase B: trip logistics and gear
+## Phase B: trip logistics, gear and funds
 
 ### Navigation and information architecture
 
@@ -151,6 +151,9 @@ The dashboard is the command centre for the selected trip. Sidebar workspaces ar
 
 ### Funds workspace
 
+- **First increment implemented:** accepted members share ZAR-based estimates, confirmed costs and paid-cost records with editable categories, participant splits, payer assignments, private references, route-aware starter assumptions and calculated member balances.
+- Keep public route visitors out of budgets and balances; creators and contributors can edit while invited viewers remain read-only.
+- Treat starter estimates as visible, editable assumptions rather than current local-price claims.
 - Maintain an estimated and actual budget for each trip.
 - Cover accommodation, food, groceries, transport, fuel, permits, repairs, activities and an emergency buffer.
 - Calculate totals per trip, per day and per person in the trip currency, with South African rand as the initial default.
