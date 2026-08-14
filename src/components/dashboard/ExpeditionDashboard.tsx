@@ -34,6 +34,7 @@ import {
   Timer,
   Trash2,
   TrendingUp,
+  WalletCards,
   X,
   Zap,
 } from "lucide-react";
@@ -41,8 +42,11 @@ import { useEffect, useMemo, useState, type ComponentType } from "react";
 import ElevationProfile from "@/components/dashboard/ElevationProfile";
 import AdventureCreator from "@/components/planner/AdventureCreator";
 import GooglePlaceDetailsCard from "@/components/places/GooglePlaceDetailsCard";
+import AccommodationDashboard from "@/components/logistics/AccommodationDashboard";
+import PhaseBWorkspace, { type LogisticsWorkspaceName } from "@/components/logistics/PhaseBWorkspace";
 import ReadinessWorkspace from "@/components/readiness/ReadinessWorkspace";
 import RouteLibrary from "@/components/routes/RouteLibrary";
+import WeatherWorkspace from "@/components/weather/WeatherWorkspace";
 import { deleteAdventure, loadAdventures, replaceLocalAdventures, saveAdventure } from "@/lib/adventures";
 import { cloudAdventureId, deleteCloudAdventure, loadCloudAdventures, saveCloudAdventure } from "@/lib/cloudAdventures";
 import { buildItinerary, buildItineraryGpx, findItineraryWarnings, formatClock, suggestRouteStops } from "@/lib/itinerary";
@@ -59,7 +63,7 @@ const ExpeditionMap = dynamic(() => import("@/components/map/ExpeditionMap"), {
 });
 
 type Icon = ComponentType<{ className?: string; strokeWidth?: number }>;
-type WorkspaceTab = "Overview" | "Route Intelligence" | "Accommodation" | "Weather";
+type WorkspaceTab = "Route Intelligence" | "Accommodation" | "Weather";
 
 const navigation: { label: string; icon: Icon }[] = [
   { label: "Dashboard", icon: CircleGauge },
@@ -68,9 +72,10 @@ const navigation: { label: string; icon: Icon }[] = [
   { label: "Readiness", icon: Gauge },
   { label: "Stays", icon: TentTree },
   { label: "Gear", icon: Bike },
+  { label: "Funds", icon: WalletCards },
 ];
 
-const tabs: WorkspaceTab[] = ["Overview", "Route Intelligence", "Accommodation", "Weather"];
+const tabs: WorkspaceTab[] = ["Route Intelligence", "Accommodation", "Weather"];
 
 const poiLabels: Record<PoiCategory, string> = {
   fuel: "Fuel",
@@ -398,7 +403,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   const [route, setRoute] = useState<RouteDataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeNav, setActiveNav] = useState("Dashboard");
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("Overview");
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("Route Intelligence");
   const [terrainEnabled, setTerrainEnabled] = useState(true);
   const [focusPoint, setFocusPoint] = useState<RoutePoint | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -651,6 +656,23 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
     setActiveNav(label);
   }
 
+  async function updateTripSchedule(startsOn: string | undefined, departureTime: string) {
+    const saved = adventures.find((adventure) => adventure.route.id === route?.id);
+    if (!saved) throw new Error("Save this route before setting its trip schedule.");
+    if (saved.access?.role === "viewer") throw new Error("Viewers cannot change the trip schedule.");
+    const updated: AdventurePlan = { ...saved, startsOn, departureTime, updatedAt: new Date().toISOString() };
+    setAdventures(saveAdventure(updated, userId));
+    setCloudStatus("Saving trip schedule…");
+    try {
+      await saveCloudAdventure(updated, userId);
+      setAdventures(replaceLocalAdventures(await loadCloudAdventures(userId), userId));
+      setCloudStatus("Trip schedule saved");
+    } catch (reason) {
+      setCloudStatus("Trip schedule cloud save failed");
+      throw reason;
+    }
+  }
+
   async function removeAdventure(id: string) {
     setAdventures(deleteAdventure(id, userId));
     try {
@@ -700,7 +722,9 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   const activeAdventure = adventures.find((adventure) => adventure.route.id === route.id);
   const canEditActiveRoute = activeAdventure?.access?.role !== "viewer";
 
-  if (activeNav === "Plan adventure" || activeNav === "My routes" || activeNav === "Readiness") {
+  const logisticsWorkspace = (["Stays", "Gear", "Funds"] as LogisticsWorkspaceName[]).find((name) => name === activeNav);
+
+  if (activeNav === "Plan adventure" || activeNav === "My routes" || activeNav === "Readiness" || logisticsWorkspace) {
     return (
       <div className="min-h-screen bg-[#041421] text-[#d0d6d6] lg:flex">
         {sidebarOpen && <button className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close navigation overlay" />}
@@ -709,14 +733,16 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
           <header className="sticky top-0 z-30 flex h-[76px] items-center gap-3 border-b border-white/[0.06] bg-[#041421]/88 px-4 backdrop-blur-xl sm:px-6 xl:px-8">
             <button onClick={() => setSidebarOpen(true)} className="grid size-10 place-items-center rounded-xl border border-white/[0.07] bg-[#042630] text-[#d0d6d6]/70 lg:hidden" aria-label="Open navigation"><Menu className="size-5" /></button>
             <div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#86b9b0]/48">Workspace</p><h1 className="text-[15px] font-semibold tracking-[-0.01em] text-white">{activeNav}</h1></div>
-            {activeNav !== "Readiness" && <button onClick={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} className="ml-auto hidden h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/68 px-4 text-xs font-semibold text-[#d0d6d6]/64 transition hover:text-white sm:flex"><Plus className="size-4 text-[#86b9b0]" /> New route</button>}
-            {activeNav === "Readiness" && <span className="ml-auto" />}
+            {activeNav !== "Readiness" && !logisticsWorkspace && <button onClick={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} className="ml-auto hidden h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/68 px-4 text-xs font-semibold text-[#d0d6d6]/64 transition hover:text-white sm:flex"><Plus className="size-4 text-[#86b9b0]" /> New route</button>}
+            {(activeNav === "Readiness" || logisticsWorkspace) && <span className="ml-auto" />}
             <button className="relative grid size-10 place-items-center rounded-xl border border-white/[0.07] bg-[#042630]/68 text-[#d0d6d6]/58" aria-label="Notifications"><Bell className="size-[18px]" /></button>
           </header>
           {activeNav === "Plan adventure" ? (
             <AdventureCreator initialAdventure={editingAdventure} onCancel={() => { setEditingAdventure(null); setActiveNav("Dashboard"); }} onSave={storeAdventure} />
           ) : activeNav === "Readiness" ? (
             <ReadinessWorkspace profile={profile} adventures={adventures} activeRoute={route} onAnalyzeEvidence={(packet, selectedRoute, anchors) => requestAnalysis("Explain the most important preparation gaps for this route using my deterministic readiness evidence. Keep the readiness score unchanged and distinguish measured evidence from advice.", packet, selectedRoute, anchors)} />
+          ) : logisticsWorkspace ? (
+            <PhaseBWorkspace name={logisticsWorkspace} adventure={activeAdventure} pois={poiDataset?.items ?? []} />
           ) : (
             <RouteLibrary adventures={adventures} syncStatus={cloudStatus} currentUserId={userId} onOpen={openAdventure} onCreate={() => { setEditingAdventure(null); setActiveNav("Plan adventure"); }} onDelete={removeAdventure} onRefresh={refreshCloudRoutes} />
           )}
@@ -776,9 +802,9 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
               {canEditActiveRoute && <button onClick={editCurrentRoute} className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/72 px-4 text-xs font-semibold text-[#d0d6d6]/72 transition hover:border-[#86b9b0]/24 hover:text-white">
                 <PencilLine className="size-4 text-[#86b9b0]" /> Edit route
               </button>}
-              <button className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/72 px-4 text-xs font-semibold text-[#d0d6d6]/72 transition hover:border-[#86b9b0]/24 hover:text-white">
+              <button onClick={() => setActiveTab("Weather")} className="flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-[#042630]/72 px-4 text-xs font-semibold text-[#d0d6d6]/72 transition hover:border-[#86b9b0]/24 hover:text-white">
                 <CalendarDays className="size-4 text-[#86b9b0]" />
-                Set trip date
+                {activeAdventure?.startsOn ? new Date(`${activeAdventure.startsOn}T12:00:00`).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "Set trip date"}
               </button>
               <button onClick={() => requestAnalysis()} disabled={analysisLoading} className="flex h-10 items-center gap-2 rounded-xl bg-[#86b9b0] px-4 text-xs font-bold text-[#041421] shadow-[0_10px_30px_rgba(134,185,176,0.17)] transition hover:-translate-y-0.5 hover:bg-[#9ac9c0] disabled:cursor-wait disabled:opacity-65">
                 {analysisLoading ? <LoaderCircle className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
@@ -800,6 +826,12 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
             ))}
           </div>
 
+          {activeTab === "Weather" ? (
+            <WeatherWorkspace route={route} adventure={activeAdventure} canEdit={Boolean(activeAdventure) && canEditActiveRoute} onScheduleChange={updateTripSchedule} />
+          ) : activeTab === "Accommodation" ? (
+            <AccommodationDashboard adventure={activeAdventure} pois={poiDataset?.items ?? []} onOpenStays={() => setActiveNav("Stays")} />
+          ) : (
+          <>
           <section className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
             <MetricCard icon={Navigation} label="Distance" value={`${metrics.distanceKm} km`} note="Total track length" delay={40} />
             <MetricCard icon={TrendingUp} label="Total ascent" value={`${metrics.ascentM.toLocaleString()} m`} note={`${metrics.descentM.toLocaleString()} m descent`} delay={80} />
@@ -1111,8 +1143,10 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
 
           <footer className="mt-6 flex flex-col gap-2 border-t border-white/[0.05] py-5 text-[10px] text-[#d0d6d6]/25 sm:flex-row sm:items-center sm:justify-between">
             <span>Route source: {route.source}</span>
-            <span className="flex items-center gap-1.5"><CloudSun className="size-3" /> Live weather and stay search will activate when trip dates are set.</span>
+            <span className="flex items-center gap-1.5"><CloudSun className="size-3" /> Route weather is available in the Weather tab.</span>
           </footer>
+          </>
+          )}
         </div>
       </main>
       {analysisOpen && <AnalysisDrawer routeName={analysisRouteName ?? route.name} analysis={analysis} places={analysisPlaces} model={analysisModel} error={analysisError} loading={analysisLoading} onClose={() => setAnalysisOpen(false)} />}

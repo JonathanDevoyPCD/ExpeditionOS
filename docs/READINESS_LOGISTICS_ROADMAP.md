@@ -67,6 +67,59 @@ The product is not a generic hotel browser. Route boundaries, rider capability a
 
 ## Phase B: trip logistics and gear
 
+### Navigation and information architecture
+
+Use the application navigation consistently rather than turning every Phase B feature into a dashboard tab.
+
+**Sidebar workspaces**
+
+- **Stays:** accommodation discovery, comparison, selected overnight stays, reservations and booking references.
+- **Gear:** personal and shared packing lists, assignments, packed status and missing-item warnings.
+- **Funds:** trip budgets, estimated and actual costs, payer assignments and balances. Funds remains a dedicated workspace because it spans accommodation, food, transport and gear rather than belonging to one dashboard panel.
+
+**Dashboard tabs**
+
+- **Route Intelligence:** route load, stages, resupply gaps, readiness signals and route-specific risks.
+- **Accommodation:** a compact trip summary showing overnight coverage, selected and backup stays, reservation status and accommodation cost totals. Detailed work opens in the Stays sidebar workspace.
+- **Weather:** route-aware current conditions, hourly and daily forecasts, animated map overlays and weather risks. Detailed weather remains in the trip dashboard because it changes the viability and timing of the active route.
+
+The dashboard is the command centre for the selected trip. Sidebar workspaces are where the user performs deeper cross-trip planning and management.
+
+### Weather intelligence
+
+#### Forecast data decision
+
+- Use the [Google Maps Platform Weather API](https://developers.google.com/maps/documentation/weather/) as the primary production source. It is already enabled for ExpeditionOS, covers South Africa for current, hourly and daily data, refreshes frequently, and provides up to 240 hourly forecast hours and 10 daily forecast days.
+- Fetch weather through a server route so the Google key remains private. Cache by rounded coordinate, forecast type and provider update window to avoid repeat billable requests.
+- Use [Open-Meteo](https://open-meteo.com/en/docs) during development as a fallback and, where useful, as an explicit model-comparison source. Do not silently merge two providers into a single forecast. Show the provider, model where available, model/update time and data age.
+- Google does not currently provide public weather alerts for South Africa. ExpeditionOS must therefore derive clearly labelled planning warnings from forecast values and must not present them as official government alerts.
+
+#### Route-aware sampling
+
+- Sample the route start and finish, every overnight stage end, major high points and exposed segments, plus evenly spaced points on long stages.
+- Prefer the forecast nearest the rider's expected arrival time at each sample rather than applying one town forecast to the entire route.
+- Calculate cycling-specific effects including projected headwind, tailwind and crosswind from route bearing; gust exposure; heat and cold stress; rain windows; thunderstorm probability; visibility; and available daylight.
+- Keep the forecast date-aware. For trips beyond the provider forecast horizon, show seasonal planning context separately and label it as non-forecast guidance.
+- Every weather card must show when it was updated and degrade visibly when data is stale or unavailable.
+
+#### Weather tab
+
+- Current conditions for the active route or selected stage.
+- A scrollable 48-hour detailed timeline and the provider's complete hourly horizon on demand.
+- A 10-day daily summary with minimum/maximum temperature, precipitation, wind/gust, sunrise and sunset.
+- Stage cards that show likely conditions at planned departure, exposed/high points and arrival.
+- A time slider with map toggles for wind, gusts, rain/precipitation, temperature, cloud and pressure where the selected visual provider supports them.
+- Explicit route warnings and suggested timing changes. Forecasts remain planning guidance, not a safety guarantee.
+
+#### Wind and rain map decision
+
+- Earth Nullschool is an excellent reference visualization, but it does not expose a documented supported application API. Do not scrape its private data paths or make the product dependent on an iframe.
+- Add an **Open in Earth** action that deep-links to the selected route area for an optional global wind view, with clear external attribution.
+- For the first in-app visual layer, use forecast raster tiles that can sit above the existing MapLibre map. OpenWeather Weather Maps 2.0 is the preferred technical fit because it exposes wind, precipitation, temperature, cloud and pressure tiles with forecast timestamps. It requires a separate subscription/API key and a licensing check before production use.
+- Keep Windy Map Forecast API as the premium Earth-style option. It offers animated particles, multiple forecast models and many layers, but its production licence is materially more expensive and it uses its own map integration.
+- RainViewer may be used only as an optional recent-radar layer where coverage exists. Its free API no longer supplies future nowcast frames and has no SLA, so it cannot be the projected-rain source or the sole rain layer.
+- A custom particle renderer driven by raw GFS/ECMWF grids is possible later, but it is a separate data-processing and performance project rather than the Phase B minimum.
+
 ### Durable shared entities
 
 - Trip stages and adjustable day boundaries.

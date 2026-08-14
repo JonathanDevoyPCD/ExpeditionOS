@@ -36,9 +36,17 @@ Google-only businesses are not yet added as markers to the MapLibre map. Google'
 - **Routes API:** Compare Google bicycle routes with Valhalla candidates and offer shorter-distance alternatives. Google route geometry must follow its display and attribution policies.
 - **Geocoding API:** Improve explicit address and business search where Nominatim is ambiguous.
 - **Maps Elevation API:** Provide an optional second elevation source for route-profile comparison and anomaly detection.
-- **Weather, Air Quality and Pollen APIs:** Add date-aware environmental panels once trip dates and forecast confidence rules are implemented.
+- **Air Quality and Pollen APIs:** Add date-aware environmental panels after the Phase B Weather tab and its forecast confidence rules are implemented.
 - **Map Tiles API / photorealistic 3D:** The 2D Roadmap, Terrain and Satellite session/proxy integration is implemented, but Google's live endpoint currently reports that Map Tiles API is disabled or has not propagated for the configured Cloud project. Once enabled, these layers activate automatically after an app refresh. Photorealistic 3D remains a later renderer and cost decision.
 - **Time Zone API:** Convert opening hours, sunrise and itinerary times correctly for routes crossing time zones.
+
+## Weather visualization providers
+
+**Build now:** Use the already-enabled Google Weather API for server-side current, hourly and daily route forecasts. The Phase B plan defines route sampling, caching, cycling-specific wind calculations and visible source/update metadata. Google currently covers South Africa for forecasts but not its public weather-alert endpoint, so app-derived warnings must be labelled as planning guidance rather than official alerts.
+
+**Deferred pending a provider key or licence:** Projected wind, rain, temperature, cloud and pressure tiles inside the existing MapLibre map. OpenWeather Weather Maps 2.0 is the preferred direct tile integration. Windy Map Forecast is the premium alternative for a complete Earth-style particle experience, but its production licence is substantially more expensive. RainViewer can supplement recent radar where coverage exists, but its free API no longer provides future nowcast frames.
+
+Earth Nullschool does not publish a supported application API. ExpeditionOS can safely provide a coordinate-aware **Open in Earth** link, but must not scrape or depend on Nullschool's internal data files or an unsupported iframe. Building our own animated GFS/ECMWF particle layer remains possible later if the value justifies the data-processing, caching, attribution and performance work.
 
 The legacy Directions and Distance Matrix APIs are not priorities because Routes API is their modern replacement. Mobile SDKs, Navigation SDKs, Solar, Roads and Route Optimization do not currently solve the core bikepacking-planning problem.
 
