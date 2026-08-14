@@ -141,6 +141,97 @@ export type Database = {
           },
         ]
       }
+      adventure_fund_items: {
+        Row: {
+          actual_amount: number | null
+          adventure_id: string
+          booking_reference: string | null
+          category: string
+          cost_status: string
+          created_at: string
+          created_by: string
+          currency: string
+          estimated_amount: number
+          id: string
+          name: string
+          notes: string | null
+          occurred_on: string | null
+          participant_ids: string[]
+          payer_id: string | null
+          split_method: string
+          split_weights: Json
+          stage_day: number | null
+          template_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          actual_amount?: number | null
+          adventure_id: string
+          booking_reference?: string | null
+          category?: string
+          cost_status?: string
+          created_at?: string
+          created_by: string
+          currency?: string
+          estimated_amount?: number
+          id?: string
+          name: string
+          notes?: string | null
+          occurred_on?: string | null
+          participant_ids: string[]
+          payer_id?: string | null
+          split_method?: string
+          split_weights?: Json
+          stage_day?: number | null
+          template_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          actual_amount?: number | null
+          adventure_id?: string
+          booking_reference?: string | null
+          category?: string
+          cost_status?: string
+          created_at?: string
+          created_by?: string
+          currency?: string
+          estimated_amount?: number
+          id?: string
+          name?: string
+          notes?: string | null
+          occurred_on?: string | null
+          participant_ids?: string[]
+          payer_id?: string | null
+          split_method?: string
+          split_weights?: Json
+          stage_day?: number | null
+          template_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adventure_fund_items_adventure_id_fkey"
+            columns: ["adventure_id"]
+            isOneToOne: false
+            referencedRelation: "adventures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adventure_fund_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adventure_fund_items_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adventure_members: {
         Row: {
           added_by: string | null

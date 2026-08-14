@@ -79,7 +79,8 @@ button {
 }
 
 .stay-input,
-.gear-input {
+.gear-input,
+.fund-input {
   height: 2.5rem;
   border: 1px solid rgba(208, 214, 214, 0.08);
   border-radius: 0.75rem;
@@ -92,13 +93,15 @@ button {
 }
 
 .stay-input:focus,
-.gear-input:focus {
+.gear-input:focus,
+.fund-input:focus {
   border-color: rgba(134, 185, 176, 0.4);
   background: rgba(4, 20, 33, 0.78);
 }
 
 .stay-input:disabled,
-.gear-input:disabled {
+.gear-input:disabled,
+.fund-input:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
