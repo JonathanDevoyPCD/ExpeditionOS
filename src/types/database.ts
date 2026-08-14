@@ -62,6 +62,85 @@ export type Database = {
           },
         ]
       }
+      adventure_gear_items: {
+        Row: {
+          adventure_id: string
+          assigned_to: string | null
+          category: string
+          created_at: string
+          created_by: string
+          id: string
+          is_critical: boolean
+          item_scope: string
+          name: string
+          notes: string | null
+          packed_quantity: number
+          packing_status: string
+          quantity: number
+          template_key: string | null
+          unit_weight_grams: number | null
+          updated_at: string
+        }
+        Insert: {
+          adventure_id: string
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          created_by: string
+          id?: string
+          is_critical?: boolean
+          item_scope?: string
+          name: string
+          notes?: string | null
+          packed_quantity?: number
+          packing_status?: string
+          quantity?: number
+          template_key?: string | null
+          unit_weight_grams?: number | null
+          updated_at?: string
+        }
+        Update: {
+          adventure_id?: string
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_critical?: boolean
+          item_scope?: string
+          name?: string
+          notes?: string | null
+          packed_quantity?: number
+          packing_status?: string
+          quantity?: number
+          template_key?: string | null
+          unit_weight_grams?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adventure_gear_items_adventure_id_fkey"
+            columns: ["adventure_id"]
+            isOneToOne: false
+            referencedRelation: "adventures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adventure_gear_items_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adventure_gear_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adventure_members: {
         Row: {
           added_by: string | null

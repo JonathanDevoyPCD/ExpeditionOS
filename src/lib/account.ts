@@ -12,6 +12,7 @@ export async function exportAccountData(userId: string) {
     supabase.from("adventure_members").select("*"),
     supabase.from("adventure_invitations").select("*"),
     supabase.from("adventure_stays").select("*"),
+    supabase.from("adventure_gear_items").select("*"),
     supabase.from("strava_activities").select("*").eq("user_id", userId),
   ]);
   const error = results.find((result) => result.error)?.error;
@@ -24,7 +25,7 @@ export async function exportAccountData(userId: string) {
 
   return {
     exportedAt: new Date().toISOString(),
-    formatVersion: 2,
+    formatVersion: 3,
     account: {
       profile: results[0].data,
       privateDetails: results[1].data,
@@ -35,7 +36,8 @@ export async function exportAccountData(userId: string) {
     tripMemberships: results[5].data ?? [],
     tripInvitations: results[6].data ?? [],
     tripStays: results[7].data ?? [],
-    stravaActivities: results[8].data ?? [],
+    tripGear: results[8].data ?? [],
+    stravaActivities: results[9].data ?? [],
   };
 }
 

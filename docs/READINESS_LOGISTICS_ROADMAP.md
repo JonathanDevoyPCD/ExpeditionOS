@@ -141,6 +141,14 @@ The dashboard is the command centre for the selected trip. Sidebar workspaces ar
 - Compare several candidates before selecting an overnight stay.
 - Start with manually saved candidates and provider search links; add licensed live inventory during the deferred provider phase.
 
+### Gear workspace
+
+- **First increment implemented:** accepted trip members share a trip-specific packing list with personal/shared scope, trip-member assignments, packed quantities, missing and critical warnings, known-weight totals and a reusable bikepacking starter checklist.
+- Keep public route visitors out of packing lists and assignments; creators and contributors can edit while invited viewers remain read-only.
+- Organize equipment across bike repairs, sleep and shelter, navigation and power, food and water, clothing, safety and medical, documents and trip-specific extras.
+- Make incomplete critical items and explicitly missing equipment visible before departure instead of hiding them inside an overall percentage.
+- Preserve manual control over quantities, assignees, item weight and notes after applying the starter checklist.
+
 ### Funds workspace
 
 - Maintain an estimated and actual budget for each trip.
