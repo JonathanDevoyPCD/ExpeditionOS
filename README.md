@@ -30,6 +30,7 @@ The first working slice includes:
 - A private profile for address, travel documents, medical aid, allergies, blood type, doctor and emergency contacts.
 - Per-user cloud route libraries with automatic import of existing browser-local routes.
 - Trip collaboration with owner, editor and viewer roles, in-app invitations and member removal.
+- A private reusable 96-item bikepacking gear catalogue with editable categories and defaults, visual multi-select trip packing, acquisition states, estimated fixed/consumable weight and optional Takealot search links.
 - Explicit per-trip emergency-profile sharing; contact details and travel documents remain owner-only.
 - Row-level security on every exposed table, validated with a rolled-back two-user isolation test.
 - A server-only Strava integration with encrypted rotating tokens, owner-isolated cycling summaries, manual sync, automatic webhook updates, rate-aware sensor-stream summaries and private readiness-v3 terrain/Copilot evidence.

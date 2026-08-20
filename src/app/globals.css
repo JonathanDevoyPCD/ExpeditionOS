@@ -99,6 +99,10 @@ button {
   background: rgba(4, 20, 33, 0.78);
 }
 
+.gear-input-with-icon {
+  padding-left: 2.5rem;
+}
+
 .stay-input:disabled,
 .gear-input:disabled,
 .fund-input:disabled {

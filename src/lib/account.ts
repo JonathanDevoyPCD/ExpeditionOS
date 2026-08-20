@@ -15,6 +15,9 @@ export async function exportAccountData(userId: string) {
     supabase.from("adventure_gear_items").select("*"),
     supabase.from("adventure_fund_items").select("*"),
     supabase.from("strava_activities").select("*").eq("user_id", userId),
+    supabase.from("gear_catalog_profiles").select("*").eq("user_id", userId).maybeSingle(),
+    supabase.from("gear_catalog_categories").select("*").eq("owner_id", userId),
+    supabase.from("gear_catalog_items").select("*").eq("owner_id", userId),
   ]);
   const error = results.find((result) => result.error)?.error;
   if (error) throw error;
@@ -26,7 +29,7 @@ export async function exportAccountData(userId: string) {
 
   return {
     exportedAt: new Date().toISOString(),
-    formatVersion: 4,
+    formatVersion: 5,
     account: {
       profile: results[0].data,
       privateDetails: results[1].data,
@@ -40,6 +43,11 @@ export async function exportAccountData(userId: string) {
     tripGear: results[8].data ?? [],
     tripFunds: results[9].data ?? [],
     stravaActivities: results[10].data ?? [],
+    gearCatalogue: {
+      profile: results[11].data,
+      categories: results[12].data ?? [],
+      items: results[13].data ?? [],
+    },
   };
 }
 
