@@ -33,7 +33,6 @@ import {
   TentTree,
   Timer,
   Trash2,
-  TrendingUp,
   WalletCards,
   X,
   Zap,
@@ -65,6 +64,7 @@ const ExpeditionMap = dynamic(() => import("@/components/map/ExpeditionMap"), {
 
 type Icon = ComponentType<{ className?: string; strokeWidth?: number }>;
 type WorkspaceTab = "Route Intelligence" | "Accommodation" | "Weather";
+type RouteContextMode = "Intelligence" | "Copilot" | "Services";
 
 const navigation: { label: string; icon: Icon }[] = [
   { label: "Dashboard", icon: CircleGauge },
@@ -108,34 +108,6 @@ function formatDuration(totalMinutes: number) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
-}
-
-function MetricCard({
-  icon: MetricIcon,
-  label,
-  value,
-  note,
-  delay,
-}: {
-  icon: Icon;
-  label: string;
-  value: string;
-  note: string;
-  delay: number;
-}) {
-  return (
-    <article className="soft-panel rise-in rounded-2xl p-4" style={{ animationDelay: `${delay}ms` }}>
-      <div className="mb-5 flex items-start justify-between">
-        <span className="grid size-9 place-items-center rounded-xl bg-[#86b9b0]/12 text-[#86b9b0]">
-          <MetricIcon className="size-[18px]" strokeWidth={1.8} />
-        </span>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#86b9b0]/55">Route</span>
-      </div>
-      <p className="text-xs font-medium text-[#d0d6d6]/52">{label}</p>
-      <p className="mt-1 text-[1.6rem] font-semibold tracking-[-0.035em] text-white">{value}</p>
-      <p className="mt-1 text-[11px] text-[#d0d6d6]/38">{note}</p>
-    </article>
-  );
 }
 
 function Sidebar({
@@ -405,6 +377,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
   const [error, setError] = useState<string | null>(null);
   const [activeNav, setActiveNav] = useState("Dashboard");
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("Route Intelligence");
+  const [routeContextMode, setRouteContextMode] = useState<RouteContextMode>("Intelligence");
   const [terrainEnabled, setTerrainEnabled] = useState(true);
   const [focusPoint, setFocusPoint] = useState<RoutePoint | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -833,19 +806,18 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
             <AccommodationDashboard adventure={activeAdventure} pois={poiDataset?.items ?? []} onOpenStays={() => setActiveNav("Stays")} />
           ) : (
           <>
-          <TripCommandCentre
-            adventure={activeAdventure}
-            itineraryWarnings={itineraryWarnings}
-            onOpen={(workspace) => {
-              if (workspace === "Weather") setActiveTab("Weather");
-              else setActiveNav(workspace);
-            }}
-          />
-          <section className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <MetricCard icon={Navigation} label="Distance" value={`${metrics.distanceKm} km`} note="Total track length" delay={40} />
-            <MetricCard icon={TrendingUp} label="Total ascent" value={`${metrics.ascentM.toLocaleString()} m`} note={`${metrics.descentM.toLocaleString()} m descent`} delay={80} />
-            <MetricCard icon={Mountain} label="Highest point" value={`${metrics.maxElevationM.toLocaleString()} m`} note={`${metrics.minElevationM.toLocaleString()} m lowest`} delay={120} />
-            <MetricCard icon={Timer} label="Moving estimate" value={formatDuration(metrics.estimatedMovingMinutes)} note="Baseline at 15 km/h" delay={160} />
+          <section aria-label="Route facts" className="rise-in mt-4 grid grid-cols-2 overflow-hidden rounded-2xl border border-white/[0.07] bg-[#042630]/42 lg:grid-cols-4">
+            {[
+              { icon: Navigation, label: "Distance", value: `${metrics.distanceKm} km`, note: "track length" },
+              { icon: Gauge, label: "Total ascent", value: `${metrics.ascentM.toLocaleString()} m`, note: `${metrics.descentM.toLocaleString()} m descent` },
+              { icon: Mountain, label: "High point", value: `${metrics.maxElevationM.toLocaleString()} m`, note: `${metrics.minElevationM.toLocaleString()} m low` },
+              { icon: Timer, label: "Moving estimate", value: formatDuration(metrics.estimatedMovingMinutes), note: "at 15 km/h" },
+            ].map(({ icon: MetricIcon, label, value, note }, index) => (
+              <div key={label} className={`flex min-w-0 items-center gap-3 px-4 py-3.5 sm:px-5 ${index % 2 ? "border-l border-white/[0.06]" : ""} ${index >= 2 ? "border-t border-white/[0.06] lg:border-t-0" : ""} ${index > 0 ? "lg:border-l lg:border-white/[0.06]" : ""}`}>
+                <MetricIcon className="size-4 shrink-0 text-[#86b9b0]" strokeWidth={1.8} />
+                <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#d0d6d6]/34">{label}</p><p className="mt-0.5 truncate text-sm font-semibold text-white sm:text-base">{value}</p><p className="truncate text-[10px] text-[#d0d6d6]/30">{note}</p></div>
+              </div>
+            ))}
           </section>
 
           <section className="mt-4 grid gap-4 2xl:grid-cols-[minmax(0,1fr)_330px]">
@@ -963,8 +935,17 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-1">
-              <article className="glass-panel rise-in rounded-[22px] p-5" style={{ animationDelay: "220ms" }}>
+            <aside className="glass-panel rise-in overflow-hidden rounded-[22px]" style={{ animationDelay: "220ms" }} aria-label="Route context">
+              <div className="grid grid-cols-3 border-b border-white/[0.07] p-2">
+                {([
+                  { mode: "Intelligence" as const, icon: Flag, label: "Intel" },
+                  { mode: "Copilot" as const, icon: Sparkles, label: "Copilot" },
+                  { mode: "Services" as const, icon: TentTree, label: "Services" },
+                ]).map(({ mode, icon: ModeIcon, label }) => (
+                  <button key={mode} type="button" aria-pressed={routeContextMode === mode} onClick={() => setRouteContextMode(mode)} className={`flex h-10 items-center justify-center gap-1.5 rounded-xl text-[10px] font-semibold transition ${routeContextMode === mode ? "bg-[#86b9b0] text-[#041421]" : "text-[#d0d6d6]/42 hover:bg-white/[0.04] hover:text-white"}`}><ModeIcon className="size-3.5" />{label}</button>
+                ))}
+              </div>
+              <section className={routeContextMode === "Intelligence" ? "p-5" : "hidden"}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Flag className="size-4 text-[#86b9b0]" />
@@ -991,9 +972,9 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
                   </div>
                 </div>
                 <button onClick={() => analysis ? setAnalysisOpen(true) : requestAnalysis()} className="mt-5 w-full rounded-xl border border-[#86b9b0]/18 py-2.5 text-[11px] font-semibold text-[#86b9b0] transition hover:bg-[#86b9b0]/8">{analysis ? "View full analysis" : "Run full analysis"}</button>
-              </article>
+              </section>
 
-              <article className="glass-panel rise-in rounded-[22px] p-5" style={{ animationDelay: "260ms" }}>
+              <section className={routeContextMode === "Copilot" ? "p-5" : "hidden"}>
                 <div className="flex items-center gap-2">
                   <Sparkles className="size-4 text-[#86b9b0]" />
                   <h3 className="text-sm font-semibold text-white">Expedition copilot</h3>
@@ -1019,9 +1000,9 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
                     <button key={prompt} onClick={() => setCopilotQuestion(prompt === "Find stays" ? "What kinds of overnight or resupply stops should I plan for? Be clear that live search is not yet connected." : prompt === "Check difficulty" ? "How difficult is this route, and what training should I complete first?" : "Build a practical packing list for this route, grouped by essential categories.")} className="rounded-lg bg-white/[0.035] px-2.5 py-1.5 text-[9px] text-[#d0d6d6]/46 transition hover:bg-white/[0.07] hover:text-white">{prompt}</button>
                   ))}
                 </div>
-              </article>
+              </section>
 
-              <article className="glass-panel rise-in rounded-[22px] p-5 sm:col-span-2 2xl:col-span-1" style={{ animationDelay: "300ms" }}>
+              <section className={routeContextMode === "Services" ? "p-5" : "hidden"}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <TentTree className="size-4 text-[#86b9b0]" />
@@ -1053,11 +1034,21 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
                     <p className="mt-3 text-[9px] leading-4 text-[#d0d6d6]/28">Within {poiDataset?.corridorKm ?? 1.5} km of the route · OSM {poiDataset?.osmTimestamp ? `updated ${new Date(poiDataset.osmTimestamp).toLocaleDateString()}` : "live data"} · Google Places {poiDataset?.providers.google === "configured" ? "details load when a place is selected" : "pending a separate key"}</p>
                   </>
                 )}
-              </article>
-            </div>
+              </section>
+              {itineraryWarnings.length > 0 && <button type="button" onClick={() => document.getElementById("route-itinerary")?.scrollIntoView({ behavior: "smooth", block: "start" })} className="flex w-full items-center gap-3 border-t border-amber-300/12 bg-amber-300/[0.035] px-5 py-4 text-left"><ShieldAlert className="size-4 shrink-0 text-amber-200" /><span className="text-[10px] font-semibold text-amber-100/75">{itineraryWarnings.length} resupply warning{itineraryWarnings.length === 1 ? "" : "s"} need review</span><span className="ml-auto text-[10px] text-amber-100/45">View plan below</span></button>}
+            </aside>
           </section>
 
-          <section className="glass-panel rise-in mt-4 overflow-hidden rounded-[22px]" style={{ animationDelay: "340ms" }}>
+          <TripCommandCentre
+            adventure={activeAdventure}
+            itineraryWarnings={itineraryWarnings}
+            onOpen={(workspace) => {
+              if (workspace === "Weather") setActiveTab("Weather");
+              else setActiveNav(workspace);
+            }}
+          />
+
+          <section id="route-itinerary" className="glass-panel rise-in mt-4 scroll-mt-24 overflow-hidden rounded-[22px]" style={{ animationDelay: "340ms" }}>
             <div className="flex flex-col gap-4 border-b border-white/[0.07] px-5 py-4 lg:flex-row lg:items-center">
               <div className="mr-auto">
                 <div className="flex items-center gap-2">
