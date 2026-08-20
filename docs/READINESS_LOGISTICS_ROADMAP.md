@@ -67,6 +67,12 @@ The product is not a generic hotel browser. Route boundaries, rider capability a
 
 ## Phase B: trip logistics, gear and funds
 
+### Completed Trip Command increment
+
+- The selected trip now receives a deterministic `Blocked`, `Needs attention`, or `Ready for final review` assessment from its schedule, overnight coverage, critical gear, emergency budget, resupply warnings and reservation state.
+- Findings retain their owning workspace and provide direct actions into Weather, Stays, Gear, Funds or the route itinerary instead of presenting passive warning text.
+- Forecast readiness distinguishes dates that are past, currently covered, partly covered or still beyond Google's 10-day forecast horizon without claiming that future forecast data already exists.
+
 ### Navigation and information architecture
 
 Use the application navigation consistently rather than turning every Phase B feature into a dashboard tab.

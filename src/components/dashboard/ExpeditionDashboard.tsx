@@ -1044,6 +1044,7 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
             itineraryWarnings={itineraryWarnings}
             onOpen={(workspace) => {
               if (workspace === "Weather") setActiveTab("Weather");
+              else if (workspace === "Route") document.getElementById("route-itinerary")?.scrollIntoView({ behavior: "smooth", block: "start" });
               else setActiveNav(workspace);
             }}
           />

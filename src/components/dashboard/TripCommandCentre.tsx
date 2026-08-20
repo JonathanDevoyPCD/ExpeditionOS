@@ -7,16 +7,40 @@ import { loadAdventureFunds } from "@/lib/cloudFunds";
 import { loadAdventureGear } from "@/lib/cloudGear";
 import { loadAdventureStays } from "@/lib/cloudStays";
 import { buildTripCommandSnapshot } from "@/lib/tripCommand.mjs";
+import type { TripCommandFinding, TripCommandWorkspace } from "@/lib/tripCommand.mjs";
 import type { AdventurePlan } from "@/types/adventure";
 import type { AdventureFundItem } from "@/types/funds";
 import type { AdventureGearItem } from "@/types/gear";
 import type { ItineraryWarning } from "@/types/itinerary";
 import type { AdventureStay } from "@/types/stay";
 
-type Workspace = "Weather" | "Stays" | "Gear" | "Funds";
-
 function formatDate(date?: string) {
   return date ? new Date(`${date}T12:00:00`).toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short" }) : "Date not set";
+}
+
+function forecastDayLabel(status: string) {
+  if (status === "available") return "Available";
+  if (status === "not_yet_available") return "Not available yet";
+  if (status === "past") return "Past date";
+  return "Set date";
+}
+
+function FindingList({ title, findings, tone, onOpen }: { title: string; findings: TripCommandFinding[]; tone: "blocker" | "warning"; onOpen: (workspace: TripCommandWorkspace) => void }) {
+  const blocking = tone === "blocker";
+  return (
+    <div className={`rounded-2xl border p-4 ${blocking ? "border-amber-300/14 bg-amber-300/[0.035]" : "border-white/[0.07] bg-white/[0.02]"}`}>
+      <p className={`text-[10px] font-bold uppercase tracking-wider ${blocking ? "text-amber-200/75" : "text-[#86b9b0]/70"}`}>{title}</p>
+      <div className="mt-3 divide-y divide-white/[0.06]">
+        {findings.map((finding) => (
+          <div key={finding.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+            <span className={`size-1.5 shrink-0 rounded-full ${blocking ? "bg-amber-300" : "bg-[#86b9b0]"}`} />
+            <p className="min-w-0 flex-1 text-[10px] leading-4 text-[#d0d6d6]/58">{finding.message}</p>
+            <button type="button" onClick={() => onOpen(finding.workspace)} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition ${blocking ? "border-amber-200/14 text-amber-100/65 hover:bg-amber-200/[0.06]" : "border-[#86b9b0]/14 text-[#86b9b0]/70 hover:bg-[#86b9b0]/[0.06]"}`}>{finding.actionLabel}</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function TripCommandCentre({
@@ -26,19 +50,20 @@ export default function TripCommandCentre({
 }: {
   adventure?: AdventurePlan;
   itineraryWarnings: ItineraryWarning[];
-  onOpen: (workspace: Workspace) => void;
+  onOpen: (workspace: TripCommandWorkspace) => void;
 }) {
   const [stays, setStays] = useState<AdventureStay[]>([]);
   const [gear, setGear] = useState<AdventureGearItem[]>([]);
   const [funds, setFunds] = useState<AdventureFundItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadedAdventureId, setLoadedAdventureId] = useState<string | null>(null);
   const canReadPrivateLogistics = Boolean(adventure && adventure.access?.isMember !== false);
 
   useEffect(() => {
     let active = true;
     if (!adventure || !canReadPrivateLogistics) return;
-    queueMicrotask(() => { setLoading(true); setError(null); });
+    queueMicrotask(() => { setLoading(true); setError(null); setLoadedAdventureId(null); });
     Promise.all([
       loadAdventureStays(adventure.id),
       loadAdventureGear(adventure.id),
@@ -49,6 +74,7 @@ export default function TripCommandCentre({
         setStays(nextStays);
         setGear(nextGear);
         setFunds(nextFunds);
+        setLoadedAdventureId(adventure.id);
       })
       .catch(() => { if (active) setError("Private trip readiness could not be loaded."); })
       .finally(() => { if (active) setLoading(false); });
@@ -56,8 +82,8 @@ export default function TripCommandCentre({
   }, [adventure, canReadPrivateLogistics]);
 
   const snapshot = useMemo(
-    () => adventure ? buildTripCommandSnapshot(adventure, stays, gear, funds, itineraryWarnings) : null,
-    [adventure, funds, gear, itineraryWarnings, stays],
+    () => adventure && loadedAdventureId === adventure.id ? buildTripCommandSnapshot(adventure, stays, gear, funds, itineraryWarnings) : null,
+    [adventure, funds, gear, itineraryWarnings, loadedAdventureId, stays],
   );
 
   if (!adventure) {
@@ -76,8 +102,10 @@ export default function TripCommandCentre({
     );
   }
 
-  const status = snapshot && snapshot.blockers.length === 0 ? "Ready for final review" : "Action required";
-  const statusStyle = snapshot && snapshot.blockers.length === 0 ? "bg-[#86b9b0]/12 text-[#86b9b0]" : "bg-amber-300/10 text-amber-200";
+  const status = snapshot?.status === "ready" ? "Ready for final review" : snapshot?.status === "attention" ? "Needs attention" : "Blocked";
+  const statusStyle = snapshot?.status === "ready" ? "bg-[#86b9b0]/12 text-[#86b9b0]" : snapshot?.status === "attention" ? "bg-amber-300/10 text-amber-200" : "bg-rose-300/10 text-rose-200";
+  const blockerFindings = snapshot?.findings.filter((finding) => finding.severity === "blocker") ?? [];
+  const warningFindings = snapshot?.findings.filter((finding) => finding.severity === "warning") ?? [];
 
   return (
     <section className="glass-panel rise-in mt-5 overflow-hidden rounded-[22px]">
@@ -96,7 +124,7 @@ export default function TripCommandCentre({
               { icon: BedDouble, label: "Overnight stays", value: `${snapshot.selectedStays}/${snapshot.requiredNights}`, open: "Stays" as const },
               { icon: PackageCheck, label: "Critical gear", value: `${snapshot.packedCritical}/${snapshot.criticalTotal}`, open: "Gear" as const },
               { icon: CircleDollarSign, label: "Trip budget", value: snapshot.estimatedBudget ? `${snapshot.currency} ${snapshot.estimatedBudget.toLocaleString("en-ZA")}` : "Not set", open: "Funds" as const },
-              { icon: CloudSun, label: "Forecast window", value: adventure.startsOn ? `${adventure.days} day${adventure.days === 1 ? "" : "s"}` : "Dates needed", open: "Weather" as const },
+              { icon: CloudSun, label: "Forecast window", value: snapshot.forecastLabel, open: "Weather" as const },
             ].map(({ icon: Icon, label, value, open }) => (
               <button key={label} onClick={() => onOpen(open)} className="rounded-2xl border border-white/[0.07] bg-[#041421]/38 p-4 text-left transition hover:border-[#86b9b0]/24 hover:bg-[#041421]/58">
                 <div className="flex items-center justify-between"><Icon className="size-4 text-[#86b9b0]" /><ChevronRight className="size-3.5 text-[#d0d6d6]/24" /></div><p className="mt-4 text-lg font-semibold text-white">{value}</p><p className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-[#d0d6d6]/34">{label}</p>
@@ -104,10 +132,10 @@ export default function TripCommandCentre({
             ))}
           </div>
 
-          {(snapshot.blockers.length > 0 || snapshot.warnings.length > 0) && (
+          {snapshot.findings.length > 0 && (
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {snapshot.blockers.length > 0 && <div className="rounded-2xl border border-amber-300/14 bg-amber-300/[0.035] p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-amber-200/75">Blocking departure</p><div className="mt-3 space-y-2">{snapshot.blockers.map((blocker) => <p key={blocker} className="flex gap-2 text-[10px] leading-4 text-[#d0d6d6]/58"><span className="mt-1 size-1.5 shrink-0 rounded-full bg-amber-300" />{blocker}</p>)}</div></div>}
-              {snapshot.warnings.length > 0 && <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-[#86b9b0]/70">Review before leaving</p><div className="mt-3 space-y-2">{snapshot.warnings.map((warning) => <p key={warning} className="flex gap-2 text-[10px] leading-4 text-[#d0d6d6]/50"><span className="mt-1 size-1.5 shrink-0 rounded-full bg-[#86b9b0]" />{warning}</p>)}</div></div>}
+              {blockerFindings.length > 0 && <FindingList title="Blocking departure" findings={blockerFindings} tone="blocker" onOpen={onOpen} />}
+              {warningFindings.length > 0 && <FindingList title="Review before leaving" findings={warningFindings} tone="warning" onOpen={onOpen} />}
             </div>
           )}
 
@@ -121,14 +149,14 @@ export default function TripCommandCentre({
               {snapshot.days.map((day) => (
                 <article key={day.day} className="rounded-2xl border border-white/[0.07] bg-[#041421]/34 p-4">
                   <div className="flex items-start gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#86b9b0]/12 text-[10px] font-bold text-[#86b9b0]">D{day.day}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h5 className="truncate text-xs font-semibold text-white">{day.title}</h5><span className="text-[9px] font-semibold uppercase tracking-wider text-[#86b9b0]/65">{formatDate(day.date)}</span></div><p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[#d0d6d6]/40">{day.summary}</p></div></div>
-                  <div className="mt-4 grid grid-cols-3 gap-2 text-[9px]"><div className="rounded-xl bg-[#041421]/55 p-2.5"><span className="block text-[#d0d6d6]/30">Route</span><strong className="mt-1 block text-white">{day.targetDistanceKm} km</strong></div><button onClick={() => onOpen("Stays")} className="rounded-xl bg-[#041421]/55 p-2.5 text-left"><span className="block text-[#d0d6d6]/30">Night</span><strong className="mt-1 block truncate text-white">{day.stay?.name ?? (day.day === snapshot.days.length ? "Finish" : "Not chosen")}</strong></button><button onClick={() => onOpen("Weather")} className="rounded-xl bg-[#041421]/55 p-2.5 text-left"><span className="block text-[#d0d6d6]/30">Forecast</span><strong className="mt-1 block text-white">{day.date ? "View day" : "Set date"}</strong></button></div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-[9px]"><div className="rounded-xl bg-[#041421]/55 p-2.5"><span className="block text-[#d0d6d6]/30">Route</span><strong className="mt-1 block text-white">{day.targetDistanceKm} km</strong></div><button onClick={() => onOpen("Stays")} className="rounded-xl bg-[#041421]/55 p-2.5 text-left"><span className="block text-[#d0d6d6]/30">Night</span><strong className="mt-1 block truncate text-white">{day.stay?.name ?? (day.day === snapshot.days.length ? "Finish" : "Not chosen")}</strong></button><button onClick={() => onOpen("Weather")} className="rounded-xl bg-[#041421]/55 p-2.5 text-left"><span className="block text-[#d0d6d6]/30">Forecast</span><strong className="mt-1 block text-white">{forecastDayLabel(day.forecastStatus)}</strong></button></div>
                   {day.estimatedCost > 0 && <p className="mt-3 flex items-center gap-1.5 text-[9px] text-[#d0d6d6]/38"><CircleDollarSign className="size-3 text-[#86b9b0]" /> {snapshot.currency} {day.estimatedCost.toLocaleString("en-ZA")} assigned to this day</p>}
                 </article>
               ))}
             </div>
           </details>
 
-          {snapshot.blockers.length === 0 && snapshot.warnings.length === 0 && <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#86b9b0]/15 bg-[#86b9b0]/[0.04] p-4"><CheckCircle2 className="size-5 text-[#86b9b0]" /><p className="text-[10px] text-[#d0d6d6]/58">Core planning records are complete. Perform a final local conditions, access, and emergency review before departure.</p></div>}
+          {snapshot.status === "ready" && <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#86b9b0]/15 bg-[#86b9b0]/[0.04] p-4"><CheckCircle2 className="size-5 text-[#86b9b0]" /><p className="text-[10px] text-[#d0d6d6]/58">Core planning records are complete. Perform a final local conditions, access, and emergency review before departure.</p></div>}
         </div>
       )}
     </section>
