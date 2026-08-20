@@ -144,6 +144,7 @@ The dashboard is the command centre for the selected trip. Sidebar workspaces ar
 ### Gear workspace
 
 - **First increment implemented:** accepted trip members share a trip-specific packing list with personal/shared scope, trip-member assignments, packed quantities, missing and critical warnings, known-weight totals and a reusable bikepacking starter checklist.
+- **Catalogue increment implemented locally:** every signed-in user receives a private editable catalogue seeded with 96 normalized bikepacking items and 11 categories. A visual multi-select flow creates independent trip snapshots, while the compact checklist separates packing from owned/needed/borrow/buy status and distinguishes fixed gear from consumables.
 - Keep public route visitors out of packing lists and assignments; creators and contributors can edit while invited viewers remain read-only.
 - Organize equipment across bike repairs, sleep and shelter, navigation and power, food and water, clothing, safety and medical, documents and trip-specific extras.
 - Make incomplete critical items and explicitly missing equipment visible before departure instead of hiding them inside an overall percentage.

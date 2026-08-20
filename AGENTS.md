@@ -1,3 +1,7 @@
+# ExpeditionOS repository guidance
+
+For every task in this repository, read `SKILL.md` completely and follow it as the project-specific engineering guide. Treat the installed dependency versions, current code, migrations, and provider documentation as authoritative when they differ from that guide.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

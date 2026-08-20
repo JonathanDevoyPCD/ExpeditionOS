@@ -64,12 +64,15 @@ export type Database = {
       }
       adventure_gear_items: {
         Row: {
+          acquisition_status: string
           adventure_id: string
           assigned_to: string | null
+          catalog_item_id: string | null
           category: string
           created_at: string
           created_by: string
           id: string
+          image_key: string | null
           is_critical: boolean
           item_scope: string
           name: string
@@ -77,17 +80,23 @@ export type Database = {
           packed_quantity: number
           packing_status: string
           quantity: number
+          takealot_search_term: string | null
           template_key: string | null
           unit_weight_grams: number | null
           updated_at: string
+          weight_is_estimate: boolean
+          weight_kind: string
         }
         Insert: {
+          acquisition_status?: string
           adventure_id: string
           assigned_to?: string | null
+          catalog_item_id?: string | null
           category?: string
           created_at?: string
           created_by: string
           id?: string
+          image_key?: string | null
           is_critical?: boolean
           item_scope?: string
           name: string
@@ -95,17 +104,23 @@ export type Database = {
           packed_quantity?: number
           packing_status?: string
           quantity?: number
+          takealot_search_term?: string | null
           template_key?: string | null
           unit_weight_grams?: number | null
           updated_at?: string
+          weight_is_estimate?: boolean
+          weight_kind?: string
         }
         Update: {
+          acquisition_status?: string
           adventure_id?: string
           assigned_to?: string | null
+          catalog_item_id?: string | null
           category?: string
           created_at?: string
           created_by?: string
           id?: string
+          image_key?: string | null
           is_critical?: boolean
           item_scope?: string
           name?: string
@@ -113,9 +128,12 @@ export type Database = {
           packed_quantity?: number
           packing_status?: string
           quantity?: number
+          takealot_search_term?: string | null
           template_key?: string | null
           unit_weight_grams?: number | null
           updated_at?: string
+          weight_is_estimate?: boolean
+          weight_kind?: string
         }
         Relationships: [
           {
@@ -133,9 +151,167 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "adventure_gear_items_catalog_item_id_fkey"
+            columns: ["catalog_item_id"]
+            isOneToOne: false
+            referencedRelation: "gear_catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "adventure_gear_items_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gear_catalog_categories: {
+        Row: {
+          created_at: string
+          icon_key: string
+          id: string
+          is_active: boolean
+          name: string
+          owner_id: string
+          slug: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          icon_key?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          owner_id: string
+          slug: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          icon_key?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          owner_id?: string
+          slug?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gear_catalog_categories_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gear_catalog_items: {
+        Row: {
+          category_id: string
+          created_at: string
+          default_quantity: number
+          default_scope: string
+          description: string | null
+          estimated_unit_weight_grams: number | null
+          id: string
+          image_key: string
+          is_active: boolean
+          is_critical: boolean
+          is_optional: boolean
+          name: string
+          owner_id: string
+          sort_order: number
+          source_key: string
+          takealot_search_term: string | null
+          updated_at: string
+          weight_kind: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          default_quantity?: number
+          default_scope?: string
+          description?: string | null
+          estimated_unit_weight_grams?: number | null
+          id?: string
+          image_key?: string
+          is_active?: boolean
+          is_critical?: boolean
+          is_optional?: boolean
+          name: string
+          owner_id: string
+          sort_order?: number
+          source_key: string
+          takealot_search_term?: string | null
+          updated_at?: string
+          weight_kind?: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          default_quantity?: number
+          default_scope?: string
+          description?: string | null
+          estimated_unit_weight_grams?: number | null
+          id?: string
+          image_key?: string
+          is_active?: boolean
+          is_critical?: boolean
+          is_optional?: boolean
+          name?: string
+          owner_id?: string
+          sort_order?: number
+          source_key?: string
+          takealot_search_term?: string | null
+          updated_at?: string
+          weight_kind?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gear_catalog_items_category_id_owner_id_fkey"
+            columns: ["category_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "gear_catalog_categories"
+            referencedColumns: ["id", "owner_id"]
+          },
+          {
+            foreignKeyName: "gear_catalog_items_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gear_catalog_profiles: {
+        Row: {
+          created_at: string
+          starter_version: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          starter_version?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          starter_version?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gear_catalog_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },

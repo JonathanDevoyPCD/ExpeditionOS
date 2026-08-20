@@ -74,6 +74,12 @@ The Stays workspace now accepts arrival/departure dates, traveller and room coun
 
 The future Funds workspace should track estimated and actual trip costs for stays, food, groceries, transport, fuel, permits, repairs, activities and an emergency buffer. It should calculate trip/day/person totals, assign payers and participants, share budgets with trip members and reconcile paid versus owed amounts. The first version is budgeting and cost sharing only; receiving or transferring money requires a separate payment-provider and regulatory decision.
 
+## Takealot live product comparison
+
+**Safe first version implemented locally:** Gear catalogue items can carry an optional Takealot search phrase. Items marked Need or Buy show an outbound Takealot search link; no retailer content is copied or persisted.
+
+Live top-five products, prices, ratings, availability and retailer images remain deferred. Takealot's published Marketplace API is seller-focused rather than a general consumer product-discovery feed, and automated copying or monitoring must not be introduced without an approved catalogue or affiliate API, or explicit written permission. Until then, ExpeditionOS may support manually curated Takealot product URLs later, but must not scrape search results.
+
 ## Strava account synchronization
 
 **Phase A implemented:** ExpeditionOS now has server-side OAuth, encrypted rotating tokens, a one-year cycling-summary backfill, manual synchronization, automatic webhook updates, rate-limit tracking, safe revocation, owner-only activity access and deterministic route-specific readiness.
