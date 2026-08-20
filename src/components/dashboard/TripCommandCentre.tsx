@@ -111,16 +111,22 @@ export default function TripCommandCentre({
             </div>
           )}
 
-          <div className="mt-5 flex items-center gap-2"><CalendarDays className="size-4 text-[#86b9b0]" /><h4 className="text-xs font-semibold text-white">Day-by-day operating plan</h4></div>
-          <div className="mt-3 grid gap-3 xl:grid-cols-2">
-            {snapshot.days.map((day) => (
-              <article key={day.day} className="rounded-2xl border border-white/[0.07] bg-[#041421]/34 p-4">
-                <div className="flex items-start gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#86b9b0]/12 text-[10px] font-bold text-[#86b9b0]">D{day.day}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h5 className="truncate text-xs font-semibold text-white">{day.title}</h5><span className="text-[9px] font-semibold uppercase tracking-wider text-[#86b9b0]/65">{formatDate(day.date)}</span></div><p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[#d0d6d6]/40">{day.summary}</p></div></div>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-[9px]"><div className="rounded-xl bg-[#041421]/55 p-2.5"><span className="block text-[#d0d6d6]/30">Route</span><strong className="mt-1 block text-white">{day.targetDistanceKm} km</strong></div><button onClick={() => onOpen("Stays")} className="rounded-xl bg-[#041421]/55 p-2.5 text-left"><span className="block text-[#d0d6d6]/30">Night</span><strong className="mt-1 block truncate text-white">{day.stay?.name ?? (day.day === snapshot.days.length ? "Finish" : "Not chosen")}</strong></button><button onClick={() => onOpen("Weather")} className="rounded-xl bg-[#041421]/55 p-2.5 text-left"><span className="block text-[#d0d6d6]/30">Forecast</span><strong className="mt-1 block text-white">{day.date ? "View day" : "Set date"}</strong></button></div>
-                {day.estimatedCost > 0 && <p className="mt-3 flex items-center gap-1.5 text-[9px] text-[#d0d6d6]/38"><CircleDollarSign className="size-3 text-[#86b9b0]" /> {snapshot.currency} {day.estimatedCost.toLocaleString("en-ZA")} assigned to this day</p>}
-              </article>
-            ))}
-          </div>
+          <details className="group mt-5 border-t border-white/[0.06] pt-1">
+            <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-1 py-3 outline-none transition hover:bg-white/[0.025] focus-visible:ring-2 focus-visible:ring-[#86b9b0]/45">
+              <CalendarDays className="size-4 text-[#86b9b0]" />
+              <div className="mr-auto"><h4 className="text-xs font-semibold text-white">Day-by-day operating plan</h4><p className="mt-1 text-[10px] text-[#d0d6d6]/35">{snapshot.days.length} stages with route, overnight, forecast and cost context</p></div>
+              <span className="flex items-center gap-1.5 text-[10px] font-semibold text-[#86b9b0]">Review stages <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" /></span>
+            </summary>
+            <div className="mt-2 grid gap-3 xl:grid-cols-2">
+              {snapshot.days.map((day) => (
+                <article key={day.day} className="rounded-2xl border border-white/[0.07] bg-[#041421]/34 p-4">
+                  <div className="flex items-start gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#86b9b0]/12 text-[10px] font-bold text-[#86b9b0]">D{day.day}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h5 className="truncate text-xs font-semibold text-white">{day.title}</h5><span className="text-[9px] font-semibold uppercase tracking-wider text-[#86b9b0]/65">{formatDate(day.date)}</span></div><p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[#d0d6d6]/40">{day.summary}</p></div></div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-[9px]"><div className="rounded-xl bg-[#041421]/55 p-2.5"><span className="block text-[#d0d6d6]/30">Route</span><strong className="mt-1 block text-white">{day.targetDistanceKm} km</strong></div><button onClick={() => onOpen("Stays")} className="rounded-xl bg-[#041421]/55 p-2.5 text-left"><span className="block text-[#d0d6d6]/30">Night</span><strong className="mt-1 block truncate text-white">{day.stay?.name ?? (day.day === snapshot.days.length ? "Finish" : "Not chosen")}</strong></button><button onClick={() => onOpen("Weather")} className="rounded-xl bg-[#041421]/55 p-2.5 text-left"><span className="block text-[#d0d6d6]/30">Forecast</span><strong className="mt-1 block text-white">{day.date ? "View day" : "Set date"}</strong></button></div>
+                  {day.estimatedCost > 0 && <p className="mt-3 flex items-center gap-1.5 text-[9px] text-[#d0d6d6]/38"><CircleDollarSign className="size-3 text-[#86b9b0]" /> {snapshot.currency} {day.estimatedCost.toLocaleString("en-ZA")} assigned to this day</p>}
+                </article>
+              ))}
+            </div>
+          </details>
 
           {snapshot.blockers.length === 0 && snapshot.warnings.length === 0 && <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#86b9b0]/15 bg-[#86b9b0]/[0.04] p-4"><CheckCircle2 className="size-5 text-[#86b9b0]" /><p className="text-[10px] text-[#d0d6d6]/58">Core planning records are complete. Perform a final local conditions, access, and emergency review before departure.</p></div>}
         </div>
