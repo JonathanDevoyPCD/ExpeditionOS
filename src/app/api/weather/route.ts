@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authenticateBearerRequest } from "@/lib/supabase/server";
 import { getRouteWeather } from "@/lib/weather";
-import type { WeatherSampleKind, WeatherSampleRequest } from "@/types/weather";
+import type { WeatherForecastWindow, WeatherSampleKind, WeatherSampleRequest } from "@/types/weather";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,16 +44,31 @@ function parseSamples(value: unknown): WeatherSampleRequest[] | null {
   return samples.every((sample): sample is WeatherSampleRequest => sample !== null) ? samples : null;
 }
 
+function parseWindow(value: unknown): WeatherForecastWindow | null {
+  if (value === undefined) return {};
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const date = (candidate: unknown) => typeof candidate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : undefined;
+  const departureTime = typeof item.departureTime === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(item.departureTime) ? item.departureTime : undefined;
+  const startDate = date(item.startDate);
+  const endDate = date(item.endDate);
+  if ((item.startDate !== undefined && !startDate) || (item.endDate !== undefined && !endDate) || (item.departureTime !== undefined && !departureTime)) return null;
+  if (startDate && endDate && endDate < startDate) return null;
+  return { startDate, endDate, departureTime };
+}
+
 export async function POST(request: Request) {
   const user = await authenticateBearerRequest(request);
   if (!user) return NextResponse.json({ error: "Authentication is required." }, { status: 401 });
   if (!allowed(user.id)) return NextResponse.json({ error: "Weather refreshes are temporarily limited." }, { status: 429 });
 
   try {
-    const body = await request.json().catch(() => null) as { samples?: unknown } | null;
+    const body = await request.json().catch(() => null) as { samples?: unknown; window?: unknown } | null;
     const samples = parseSamples(body?.samples);
+    const window = parseWindow(body?.window);
     if (!samples) return NextResponse.json({ error: "One to four valid route weather points are required." }, { status: 400 });
-    return NextResponse.json(await getRouteWeather(samples), {
+    if (!window) return NextResponse.json({ error: "The forecast date or departure time is invalid." }, { status: 400 });
+    return NextResponse.json(await getRouteWeather(samples, window), {
       headers: { "Cache-Control": "private, max-age=600, stale-while-revalidate=600" },
     });
   } catch (error) {

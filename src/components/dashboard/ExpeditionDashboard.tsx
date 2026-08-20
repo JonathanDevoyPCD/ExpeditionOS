@@ -47,6 +47,7 @@ import PhaseBWorkspace, { type LogisticsWorkspaceName } from "@/components/logis
 import ReadinessWorkspace from "@/components/readiness/ReadinessWorkspace";
 import RouteLibrary from "@/components/routes/RouteLibrary";
 import WeatherWorkspace from "@/components/weather/WeatherWorkspace";
+import TripCommandCentre from "@/components/dashboard/TripCommandCentre";
 import { deleteAdventure, loadAdventures, replaceLocalAdventures, saveAdventure } from "@/lib/adventures";
 import { cloudAdventureId, deleteCloudAdventure, loadCloudAdventures, saveCloudAdventure } from "@/lib/cloudAdventures";
 import { buildItinerary, buildItineraryGpx, findItineraryWarnings, formatClock, suggestRouteStops } from "@/lib/itinerary";
@@ -656,11 +657,11 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
     setActiveNav(label);
   }
 
-  async function updateTripSchedule(startsOn: string | undefined, departureTime: string) {
+  async function updateTripSchedule(startsOn: string | undefined, departureTime: string, days?: number) {
     const saved = adventures.find((adventure) => adventure.route.id === route?.id);
     if (!saved) throw new Error("Save this route before setting its trip schedule.");
     if (saved.access?.role === "viewer") throw new Error("Viewers cannot change the trip schedule.");
-    const updated: AdventurePlan = { ...saved, startsOn, departureTime, updatedAt: new Date().toISOString() };
+    const updated: AdventurePlan = { ...saved, startsOn, departureTime, days: days ?? saved.days, updatedAt: new Date().toISOString() };
     setAdventures(saveAdventure(updated, userId));
     setCloudStatus("Saving trip schedule…");
     try {
@@ -827,11 +828,19 @@ export default function ExpeditionDashboard({ userId, profile, onOpenProfile, on
           </div>
 
           {activeTab === "Weather" ? (
-            <WeatherWorkspace route={route} adventure={activeAdventure} canEdit={Boolean(activeAdventure) && canEditActiveRoute} onScheduleChange={updateTripSchedule} />
+            <WeatherWorkspace key={`${route.id}:${activeAdventure?.startsOn ?? "unscheduled"}`} route={route} adventure={activeAdventure} canEdit={Boolean(activeAdventure) && canEditActiveRoute} onScheduleChange={updateTripSchedule} />
           ) : activeTab === "Accommodation" ? (
             <AccommodationDashboard adventure={activeAdventure} pois={poiDataset?.items ?? []} onOpenStays={() => setActiveNav("Stays")} />
           ) : (
           <>
+          <TripCommandCentre
+            adventure={activeAdventure}
+            itineraryWarnings={itineraryWarnings}
+            onOpen={(workspace) => {
+              if (workspace === "Weather") setActiveTab("Weather");
+              else setActiveNav(workspace);
+            }}
+          />
           <section className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
             <MetricCard icon={Navigation} label="Distance" value={`${metrics.distanceKm} km`} note="Total track length" delay={40} />
             <MetricCard icon={TrendingUp} label="Total ascent" value={`${metrics.ascentM.toLocaleString()} m`} note={`${metrics.descentM.toLocaleString()} m descent`} delay={80} />
