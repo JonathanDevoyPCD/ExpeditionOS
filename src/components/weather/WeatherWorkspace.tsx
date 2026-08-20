@@ -17,6 +17,7 @@ import {
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { projectPointOntoRoute } from "@/lib/geo";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { localForecastDate, tripDaysBetween, tripEndDate } from "@/lib/weatherSchedule.mjs";
 import type { AdventurePlan, RouteAnchor } from "@/types/adventure";
 import type { RouteDataset, RoutePoint } from "@/types/route";
 import type { RouteWeatherHour, RouteWeatherResponse, WeatherRisk, WeatherSampleRequest } from "@/types/weather";
@@ -139,14 +140,18 @@ export default function WeatherWorkspace({
   route: RouteDataset;
   adventure?: AdventurePlan;
   canEdit: boolean;
-  onScheduleChange: (startsOn: string | undefined, departureTime: string) => Promise<void>;
+  onScheduleChange: (startsOn: string | undefined, departureTime: string, days?: number) => Promise<void>;
 }) {
   const samples = useMemo(() => buildWeatherSamples(route, adventure), [route, adventure]);
   const [selectedSampleId, setSelectedSampleId] = useState(samples[0]?.id ?? "");
+  const [selectedForecastDate, setSelectedForecastDate] = useState(adventure?.startsOn ?? "");
   const [weather, setWeather] = useState<RouteWeatherResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scheduleStatus, setScheduleStatus] = useState<string | null>(null);
+  const endsOn = tripEndDate(adventure?.startsOn, adventure?.days ?? 1);
+  const activeSampleId = samples.some((sample) => sample.id === selectedSampleId) ? selectedSampleId : samples[0]?.id ?? "";
+  const selectedSample = samples.find((sample) => sample.id === activeSampleId) ?? samples[0];
 
   async function loadWeather(signal?: AbortSignal) {
     setLoading(true);
@@ -158,7 +163,14 @@ export default function WeatherWorkspace({
       const response = await fetch("/api/weather", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ samples }),
+        body: JSON.stringify({
+          samples: selectedSample ? [selectedSample] : [],
+          window: {
+            startDate: adventure?.startsOn,
+            endDate: endsOn,
+            departureTime: adventure?.departureTime ?? "07:00",
+          },
+        }),
         signal,
       });
       const result = await response.json() as RouteWeatherResponse & { error?: string };
@@ -179,20 +191,25 @@ export default function WeatherWorkspace({
     return () => controller.abort();
     // samples are memoized from the active route and its anchors.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [samples]);
+  }, [samples, activeSampleId, adventure?.startsOn, adventure?.departureTime, endsOn]);
 
-  const selectedLocation = weather?.locations.find((location) => location.sample.id === selectedSampleId) ?? weather?.locations[0];
-  const risks = selectedLocation ? weatherRisks(selectedLocation.hourly, selectedLocation.sample.label) : [];
-  const tripDay = adventure?.startsOn ? weather?.daily.find((day) => day.date === adventure.startsOn) : undefined;
+  const selectedLocation = weather?.locations.find((location) => location.sample.id === activeSampleId) ?? weather?.locations[0];
+  const selectedHours = selectedLocation
+    ? selectedLocation.hourly.filter((hour) => localForecastDate(hour.startsAt, selectedLocation.timeZone) === selectedForecastDate)
+    : [];
+  const departureTime = adventure?.departureTime ?? "07:00";
+  const ridingHours = selectedHours.filter((hour) => hourLabel(hour.startsAt, selectedLocation?.timeZone ?? "UTC") >= departureTime);
+  const risks = selectedLocation ? weatherRisks(ridingHours.length ? ridingHours : selectedHours, selectedLocation.sample.label) : [];
+  const visibleDays = weather?.daily.filter((day) => !adventure?.startsOn || !endsOn || (day.date >= adventure.startsOn && day.date <= endsOn)) ?? [];
   const forecastEndsOn = weather?.daily.at(-1)?.date;
   const earthUrl = selectedLocation
     ? `https://earth.nullschool.net/#current/wind/surface/level/orthographic=${selectedLocation.sample.lon.toFixed(2)},${selectedLocation.sample.lat.toFixed(2)},3000`
     : "https://earth.nullschool.net/";
 
-  async function updateSchedule(startsOn: string | undefined, departureTime: string) {
+  async function updateSchedule(startsOn: string | undefined, departureTime: string, days?: number) {
     setScheduleStatus("Saving trip schedule…");
     try {
-      await onScheduleChange(startsOn, departureTime);
+      await onScheduleChange(startsOn, departureTime, days);
       setScheduleStatus("Trip schedule saved");
     } catch {
       setScheduleStatus("Trip schedule could not be saved");
@@ -216,7 +233,8 @@ export default function WeatherWorkspace({
             <div className="flex items-center gap-2"><CalendarDays className="size-4 text-[#86b9b0]" /><h3 className="text-sm font-semibold text-white">Trip forecast window</h3></div>
             <p className="mt-1 text-[10px] text-[#d0d6d6]/38">Forecasts are tied to your planned date and local departure time.</p>
           </div>
-          <label className="text-[9px] font-bold uppercase tracking-wider text-[#86b9b0]/55">Start date<input type="date" disabled={!canEdit} value={adventure?.startsOn ?? ""} onChange={(event) => void updateSchedule(event.target.value || undefined, adventure?.departureTime ?? "07:00")} className="mt-1 block h-10 rounded-xl border border-white/[0.08] bg-[#041421]/55 px-3 text-xs font-semibold text-white outline-none [color-scheme:dark] disabled:opacity-45" /></label>
+          <label className="text-[9px] font-bold uppercase tracking-wider text-[#86b9b0]/55">Start date<input type="date" disabled={!canEdit} value={adventure?.startsOn ?? ""} onChange={(event) => void updateSchedule(event.target.value || undefined, adventure?.departureTime ?? "07:00", adventure?.days)} className="mt-1 block h-10 rounded-xl border border-white/[0.08] bg-[#041421]/55 px-3 text-xs font-semibold text-white outline-none [color-scheme:dark] disabled:opacity-45" /></label>
+          <label className="text-[9px] font-bold uppercase tracking-wider text-[#86b9b0]/55">End date<input type="date" disabled={!canEdit || !adventure?.startsOn} min={adventure?.startsOn} value={endsOn ?? ""} onChange={(event) => { const days = tripDaysBetween(adventure?.startsOn, event.target.value); if (days) void updateSchedule(adventure?.startsOn, adventure?.departureTime ?? "07:00", days); }} className="mt-1 block h-10 rounded-xl border border-white/[0.08] bg-[#041421]/55 px-3 text-xs font-semibold text-white outline-none [color-scheme:dark] disabled:opacity-45" /></label>
           <label className="text-[9px] font-bold uppercase tracking-wider text-[#86b9b0]/55">Departure<input type="time" disabled={!canEdit} value={adventure?.departureTime ?? "07:00"} onChange={(event) => void updateSchedule(adventure?.startsOn, event.target.value)} className="mt-1 block h-10 rounded-xl border border-white/[0.08] bg-[#041421]/55 px-3 text-xs font-semibold text-white outline-none [color-scheme:dark] disabled:opacity-45" /></label>
           <button onClick={() => void loadWeather()} disabled={loading} className="mt-4 flex h-10 items-center justify-center gap-2 rounded-xl border border-white/[0.08] px-4 text-xs font-semibold text-[#d0d6d6]/65 transition hover:text-white disabled:opacity-45 xl:mt-0">{loading ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCw className="size-4 text-[#86b9b0]" />} Refresh</button>
         </div>
@@ -225,16 +243,16 @@ export default function WeatherWorkspace({
           {weather.fallbackReason && <span className="text-amber-200/65">{weather.fallbackReason}</span>}
           {scheduleStatus && <span className="text-[#d0d6d6]/42">{scheduleStatus}</span>}
           {!adventure?.startsOn && <span className="text-amber-200/65">Set a date to identify the relevant forecast day.</span>}
-          {adventure?.startsOn && !tripDay && forecastEndsOn && <span className="text-amber-200/65">Trip is outside the current forecast window ending {shortDate(forecastEndsOn)}.</span>}
+          {adventure?.startsOn && !visibleDays.length && forecastEndsOn && <span className="text-amber-200/65">Trip is outside the current forecast window ending {shortDate(forecastEndsOn)}.</span>}
         </div>
       </section>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {weather.locations.map((location) => (
-          <button key={location.sample.id} onClick={() => setSelectedSampleId(location.sample.id)} className={`min-w-[150px] rounded-2xl border px-4 py-3 text-left transition ${location.sample.id === selectedLocation.sample.id ? "border-[#86b9b0]/45 bg-[#86b9b0]/10" : "border-white/[0.07] bg-[#042630]/55 hover:border-[#86b9b0]/22"}`}>
-            <span className="block text-[9px] font-bold uppercase tracking-wider text-[#86b9b0]/60">{location.sample.kind.replace("_", " ")}</span>
-            <span className="mt-1 block truncate text-xs font-semibold text-white">{location.sample.label}</span>
-            <span className="mt-1 block text-[9px] text-[#d0d6d6]/36">{location.sample.distanceKm.toFixed(1)} km</span>
+        {samples.map((sample) => (
+          <button key={sample.id} onClick={() => setSelectedSampleId(sample.id)} className={`min-w-[150px] rounded-2xl border px-4 py-3 text-left transition ${sample.id === activeSampleId ? "border-[#86b9b0]/45 bg-[#86b9b0]/10" : "border-white/[0.07] bg-[#042630]/55 hover:border-[#86b9b0]/22"}`}>
+            <span className="block text-[9px] font-bold uppercase tracking-wider text-[#86b9b0]/60">{sample.kind.replace("_", " ")}</span>
+            <span className="mt-1 block truncate text-xs font-semibold text-white">{sample.label}</span>
+            <span className="mt-1 block text-[9px] text-[#d0d6d6]/36">{sample.distanceKm.toFixed(1)} km</span>
           </button>
         ))}
       </div>
@@ -255,7 +273,7 @@ export default function WeatherWorkspace({
         </article>
 
         <aside className="glass-panel rounded-[22px] p-5">
-          <div className="flex items-center gap-2"><AlertTriangle className="size-4 text-[#86b9b0]" /><h3 className="text-sm font-semibold text-white">Next 24-hour risks</h3></div>
+          <div className="flex items-center gap-2"><AlertTriangle className="size-4 text-[#86b9b0]" /><h3 className="text-sm font-semibold text-white">{selectedForecastDate ? `${shortDate(selectedForecastDate)} risks` : "Next 24-hour risks"}</h3></div>
           <div className="mt-4 space-y-2">
             {risks.map((risk) => <div key={risk.id} className={`rounded-xl border p-3 ${risk.severity === "high" ? "border-amber-300/18 bg-amber-300/[0.05]" : "border-white/[0.07] bg-white/[0.025]"}`}><div className="flex items-start gap-2"><span className={`mt-1 size-2 shrink-0 rounded-full ${risk.severity === "high" ? "bg-amber-300" : "bg-[#86b9b0]"}`} /><div><p className="text-[10px] font-semibold text-white">{risk.title}</p><p className="mt-1 text-[9px] leading-4 text-[#d0d6d6]/42">{risk.detail}</p><p className="mt-1 text-[9px] text-[#86b9b0]/55">From {hourLabel(risk.startsAt, selectedLocation.timeZone)}</p></div></div></div>)}
             {!risks.length && <div className="rounded-xl border border-[#86b9b0]/15 bg-[#86b9b0]/[0.05] p-4 text-center"><CloudSun className="mx-auto size-5 text-[#86b9b0]" /><p className="mt-2 text-[10px] font-semibold text-white">No threshold warnings</p><p className="mt-1 text-[9px] leading-4 text-[#d0d6d6]/38">Continue checking forecasts and local conditions before departure.</p></div>}
@@ -264,20 +282,21 @@ export default function WeatherWorkspace({
       </section>
 
       <section className="glass-panel overflow-hidden rounded-[22px]">
-        <div className="border-b border-white/[0.07] px-5 py-4"><h3 className="text-sm font-semibold text-white">Hourly forecast</h3><p className="mt-1 text-[10px] text-[#d0d6d6]/38">Next 24 hours at {selectedLocation.sample.label}</p></div>
+        <div className="border-b border-white/[0.07] px-5 py-4"><h3 className="text-sm font-semibold text-white">Hourly forecast</h3><p className="mt-1 text-[10px] text-[#d0d6d6]/38">{selectedForecastDate ? `${shortDate(selectedForecastDate)} from ${departureTime}` : "Next available hours"} at {selectedLocation.sample.label}</p></div>
         <div className="flex gap-2 overflow-x-auto p-4">
-          {selectedLocation.hourly.map((hour) => {
+          {(ridingHours.length ? ridingHours : selectedHours).map((hour) => {
             return <article key={hour.startsAt} className="min-w-[118px] rounded-2xl border border-white/[0.07] bg-[#041421]/38 p-3"><p className="text-[9px] font-bold text-[#86b9b0]">{hourLabel(hour.startsAt, selectedLocation.timeZone)}</p><ConditionIcon type={hour.condition.type} className="mt-3 size-5 text-[#86b9b0]" /><p className="mt-2 text-lg font-semibold text-white">{Math.round(hour.temperatureC)}°</p><p className="mt-1 truncate text-[9px] text-[#d0d6d6]/38">{hour.condition.description}</p><div className="mt-3 space-y-1 text-[9px] text-[#d0d6d6]/44"><p>Rain {Math.round(hour.precipitationProbabilityPct)}%</p><p>Wind {Math.round(hour.wind.speedKph)} km/h</p><p>Gust {Math.round(hour.wind.gustKph)} km/h</p></div></article>;
           })}
+          {selectedForecastDate && !selectedHours.length && <div className="w-full rounded-2xl border border-amber-300/15 bg-amber-300/[0.04] p-6 text-center"><AlertTriangle className="mx-auto size-5 text-amber-200" /><p className="mt-2 text-[10px] font-semibold text-white">Hourly forecast unavailable for this date</p><p className="mt-1 text-[9px] text-[#d0d6d6]/40">Hourly forecasts cover up to 240 hours. Check again when the trip enters the forecast window.</p></div>}
         </div>
       </section>
 
       <section className="glass-panel overflow-hidden rounded-[22px]">
         <div className="border-b border-white/[0.07] px-5 py-4"><h3 className="text-sm font-semibold text-white">Daily outlook</h3><p className="mt-1 text-[10px] text-[#d0d6d6]/38">Ten-day planning window at the route start</p></div>
         <div className="grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-5">
-          {weather.daily.map((day) => {
-            const selected = day.date === adventure?.startsOn;
-            return <article key={day.date} className={`rounded-2xl border p-4 ${selected ? "border-[#86b9b0]/45 bg-[#86b9b0]/10" : "border-white/[0.07] bg-[#041421]/38"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold text-white">{shortDate(day.date)}</p>{selected && <p className="mt-1 text-[8px] font-bold uppercase tracking-wider text-[#86b9b0]">Trip start</p>}</div><ConditionIcon type={day.condition.type} className="size-5 text-[#86b9b0]" /></div><p className="mt-3 text-xl font-semibold text-white">{Math.round(day.maximumTemperatureC)}° <span className="text-sm text-[#d0d6d6]/35">/ {Math.round(day.minimumTemperatureC)}°</span></p><p className="mt-1 truncate text-[9px] text-[#d0d6d6]/40">{day.condition.description}</p><div className="mt-3 space-y-1 text-[9px] text-[#d0d6d6]/42"><p>Rain {Math.round(day.precipitationProbabilityPct)}% · {day.precipitationMm.toFixed(1)} mm</p><p>Wind {Math.round(day.windSpeedKph)} · gust {Math.round(day.windGustKph)} km/h</p><p>Sun {timeLabel(day.sunriseAt, selectedLocation.timeZone)}–{timeLabel(day.sunsetAt, selectedLocation.timeZone)}</p></div></article>;
+          {(visibleDays.length ? visibleDays : weather.daily).map((day) => {
+            const selected = day.date === selectedForecastDate;
+            return <button type="button" onClick={() => setSelectedForecastDate(day.date)} key={day.date} className={`rounded-2xl border p-4 text-left transition ${selected ? "border-[#86b9b0]/45 bg-[#86b9b0]/10" : "border-white/[0.07] bg-[#041421]/38 hover:border-[#86b9b0]/22"}`}><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold text-white">{shortDate(day.date)}</p>{day.date === adventure?.startsOn && <p className="mt-1 text-[8px] font-bold uppercase tracking-wider text-[#86b9b0]">Trip start</p>}</div><ConditionIcon type={day.condition.type} className="size-5 text-[#86b9b0]" /></div><p className="mt-3 text-xl font-semibold text-white">{Math.round(day.maximumTemperatureC)}° <span className="text-sm text-[#d0d6d6]/35">/ {Math.round(day.minimumTemperatureC)}°</span></p><p className="mt-1 truncate text-[9px] text-[#d0d6d6]/40">{day.condition.description}</p><div className="mt-3 space-y-1 text-[9px] text-[#d0d6d6]/42"><p>Rain {Math.round(day.precipitationProbabilityPct)}% · {day.precipitationMm.toFixed(1)} mm</p><p>Wind {Math.round(day.windSpeedKph)} · gust {Math.round(day.windGustKph)} km/h</p><p>Sun {timeLabel(day.sunriseAt, selectedLocation.timeZone)}–{timeLabel(day.sunsetAt, selectedLocation.timeZone)}</p></div></button>;
           })}
         </div>
       </section>

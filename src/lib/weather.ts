@@ -6,10 +6,12 @@ import type {
   RouteWeatherHour,
   RouteWeatherLocation,
   RouteWeatherResponse,
+  WeatherForecastWindow,
   WeatherCondition,
   WeatherSampleRequest,
   WeatherWind,
 } from "@/types/weather";
+import { forecastHoursToCover } from "@/lib/weatherSchedule.mjs";
 
 type GoogleMeasure = { value?: number; degrees?: number; quantity?: number; distance?: number };
 type GoogleCondition = { description?: { text?: string }; type?: string };
@@ -35,7 +37,7 @@ type GoogleCurrent = GooglePeriod & {
   cloudCover?: number;
 };
 type GoogleHour = GoogleCurrent & { interval?: { startTime?: string } };
-type GoogleHourlyResponse = { forecastHours?: GoogleHour[]; timeZone?: { id?: string } };
+type GoogleHourlyResponse = { forecastHours?: GoogleHour[]; timeZone?: { id?: string }; nextPageToken?: string };
 type GoogleDaily = {
   displayDate?: { year?: number; month?: number; day?: number };
   daytimeForecast?: GooglePeriod;
@@ -151,46 +153,67 @@ async function googleWeather<T>(path: string, sample: WeatherSampleRequest, para
   return response.json() as Promise<T>;
 }
 
-function cacheKey(samples: WeatherSampleRequest[]) {
-  return samples.map((sample) => `${sample.id}:${sample.lat.toFixed(3)}:${sample.lon.toFixed(3)}:${Math.round(sample.routeBearingDegrees)}`).join("|");
+function cacheKey(samples: WeatherSampleRequest[], window: WeatherForecastWindow) {
+  const schedule = `${window.startDate ?? "current"}:${window.endDate ?? "current"}:${window.departureTime ?? "07:00"}`;
+  return `${schedule}|${samples.map((sample) => `${sample.id}:${sample.lat.toFixed(3)}:${sample.lon.toFixed(3)}:${Math.round(sample.routeBearingDegrees)}`).join("|")}`;
 }
 
 export function hasGoogleWeather() {
   return Boolean(googleApiKey());
 }
 
-export async function getRouteWeather(samples: WeatherSampleRequest[]): Promise<RouteWeatherResponse> {
-  const key = cacheKey(samples);
+export async function getRouteWeather(samples: WeatherSampleRequest[], window: WeatherForecastWindow = {}): Promise<RouteWeatherResponse> {
+  const key = cacheKey(samples, window);
   const cached = responseCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
   if (!hasGoogleWeather()) {
-    const fallback = await getOpenMeteoRouteWeather(samples, "Google Weather is not configured; Open-Meteo fallback active.");
+    const fallback = await getOpenMeteoRouteWeather(samples, window, "Google Weather is not configured; Open-Meteo fallback active.");
     responseCache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, value: fallback });
     return fallback;
   }
 
   try {
-    const value = await getGoogleRouteWeather(samples);
+    const value = await getGoogleRouteWeather(samples, window);
     responseCache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, value });
     return value;
   } catch (error) {
     console.warn("Google Weather unavailable; using Open-Meteo fallback", error instanceof Error ? error.message : "Unknown error");
-    const fallback = await getOpenMeteoRouteWeather(samples, "Google Weather is unavailable; Open-Meteo fallback active.");
+    const fallback = await getOpenMeteoRouteWeather(samples, window, "Google Weather is unavailable; Open-Meteo fallback active.");
     responseCache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, value: fallback });
     return fallback;
   }
 }
 
-async function getGoogleRouteWeather(samples: WeatherSampleRequest[]): Promise<RouteWeatherResponse> {
+async function googleForecastHours(sample: WeatherSampleRequest, totalHours: number) {
+  const forecastHours: GoogleHour[] = [];
+  let pageToken: string | undefined;
+  let timeZone = "UTC";
+  const maximumPages = Math.ceil(totalHours / 24);
+  for (let page = 0; page < maximumPages; page += 1) {
+    const response = await googleWeather<GoogleHourlyResponse>("forecast/hours:lookup", sample, {
+      hours: String(totalHours),
+      pageSize: "24",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    forecastHours.push(...(response.forecastHours ?? []));
+    timeZone = response.timeZone?.id ?? timeZone;
+    pageToken = response.nextPageToken;
+    if (!pageToken) break;
+  }
+  return { forecastHours, timeZone };
+}
+
+async function getGoogleRouteWeather(samples: WeatherSampleRequest[], window: WeatherForecastWindow): Promise<RouteWeatherResponse> {
+  const totalHours = forecastHoursToCover(window.endDate);
   const locations = await Promise.all(samples.map(async (sample): Promise<RouteWeatherLocation> => {
     const [current, hourly] = await Promise.all([
       googleWeather<GoogleCurrent>("currentConditions:lookup", sample),
-      googleWeather<GoogleHourlyResponse>("forecast/hours:lookup", sample, { hours: "24", pageSize: "24" }),
+      googleForecastHours(sample, totalHours),
     ]);
     return {
       sample,
-      timeZone: hourly.timeZone?.id ?? "UTC",
+      timeZone: hourly.timeZone,
       current: normalizeCurrent(current, sample.routeBearingDegrees),
       hourly: (hourly.forecastHours ?? []).map((hour) => normalizeHour(hour, sample.routeBearingDegrees)),
     };
@@ -215,13 +238,13 @@ const OPEN_DAILY = [
   "wind_speed_10m_max", "wind_gusts_10m_max", "sunrise", "sunset",
 ].join(",");
 
-async function openMeteo(sample: WeatherSampleRequest, includeDaily: boolean) {
+async function openMeteo(sample: WeatherSampleRequest, includeDaily: boolean, window: WeatherForecastWindow) {
+  const forecastDays = Math.max(1, Math.min(10, Math.ceil(forecastHoursToCover(window.endDate) / 24)));
   const query = new URLSearchParams({
     latitude: String(sample.lat),
     longitude: String(sample.lon),
     timezone: "auto",
-    forecast_hours: "24",
-    forecast_days: "10",
+    forecast_days: String(forecastDays),
     current: "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
     hourly: OPEN_HOURLY,
     ...(includeDaily ? { daily: OPEN_DAILY } : {}),
@@ -336,8 +359,8 @@ function cardinalDirection(degrees: number) {
   return directions[Math.round(degrees / 45) % 8];
 }
 
-async function getOpenMeteoRouteWeather(samples: WeatherSampleRequest[], fallbackReason: string): Promise<RouteWeatherResponse> {
-  const responses = await Promise.all(samples.map((sample, index) => openMeteo(sample, index === 0)));
+async function getOpenMeteoRouteWeather(samples: WeatherSampleRequest[], window: WeatherForecastWindow, fallbackReason: string): Promise<RouteWeatherResponse> {
+  const responses = await Promise.all(samples.map((sample, index) => openMeteo(sample, index === 0, window)));
   return {
     provider: "open_meteo",
     retrievedAt: new Date().toISOString(),

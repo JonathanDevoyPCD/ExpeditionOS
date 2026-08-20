@@ -10,6 +10,12 @@ export type WeatherSampleRequest = {
   routeBearingDegrees: number;
 };
 
+export type WeatherForecastWindow = {
+  startDate?: string;
+  endDate?: string;
+  departureTime?: string;
+};
+
 export type WeatherCondition = {
   description: string;
   type: string;
